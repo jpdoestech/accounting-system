@@ -32,8 +32,28 @@
                 <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</option>
               </select>
             </td>
-            <td><input v-model="line.debit" type="number" step="0.01" class="form-control form-control-sm" /></td>
-            <td><input v-model="line.credit" type="number" step="0.01" class="form-control form-control-sm" /></td>
+            <td>
+              <input
+                v-model="line.debit"
+                type="number"
+                step="0.01"
+                min="0"
+                class="form-control form-control-sm"
+                placeholder="0.00"
+                @input="line.credit = ''"
+              />
+            </td>
+            <td>
+              <input
+                v-model="line.credit"
+                type="number"
+                step="0.01"
+                min="0"
+                class="form-control form-control-sm"
+                placeholder="0.00"
+                @input="line.debit = ''"
+              />
+            </td>
             <td>
               <button type="button" class="btn btn-sm btn-outline-danger" @click="lines.splice(i, 1)">
                 <i class="bi bi-x"></i>
@@ -42,6 +62,13 @@
           </tr>
         </tbody>
       </table>
+      <p class="text-muted small mb-3">
+        <i class="bi bi-info-circle me-1"></i>
+        Each line is <strong>one side only</strong> — enter an amount in either Debit or Credit, never
+        both, on the same row. It's the entry as a whole that must balance: put the amount under Debit
+        on the account that increases, and the same amount under Credit on the account it comes from
+        (e.g. debit Cash 500 on one line, credit Owner's Capital 500 on the next).
+      </p>
 
       <button type="button" class="btn btn-sm btn-outline-secondary mb-3" @click="addLine">
         <i class="bi bi-plus"></i> Add line
