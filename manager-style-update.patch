@@ -1,0 +1,2260 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..71a3acb
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,36 @@
++# --- Backend (Python) ---
++backend/.venv/
++backend/venv/
++__pycache__/
++*.py[cod]
++*.egg-info/
++
++# Local SQLite dev database
++backend/dev.db
++backend/*.db
++backend/*.db-journal
++
++# Environment files (contain SECRET_KEY, DATABASE_URL, etc.)
++backend/.env
++.env
++.env.local
++
++# PyInstaller build output
++backend/build/
++backend/dist/
++
++# --- Frontend (Node/Vite) ---
++frontend/node_modules/
++frontend/dist/
++frontend/.vite/
++npm-debug.log*
++
++# --- Editors / OS ---
++.vscode/
++.idea/
++*.swp
++.DS_Store
++Thumbs.db
++
++# --- Misc scratch files ---
++*.log
+diff --git a/backend/app/api/v1/accounting.py b/backend/app/api/v1/accounting.py
+index 635ac84..4d32a38 100644
+--- a/backend/app/api/v1/accounting.py
++++ b/backend/app/api/v1/accounting.py
+@@ -26,6 +26,7 @@ from app.schemas.accounting import (
+     AccountingPeriodRead,
+     AccountLedgerRead,
+     AccountRead,
++    AccountUpdate,
+     FiscalYearCreate,
+     FiscalYearRead,
+     JournalEntryCreate,
+@@ -94,6 +95,29 @@ def list_accounts(
+     )
+ 
+ 
++@router.put("/accounts/{account_id}", response_model=AccountRead)
++def update_account(
++    business_id: str,
++    account_id: str,
++    payload: AccountUpdate,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    account = (
++        db.query(Account)
++        .filter(Account.id == account_id, Account.business_id == business_id)
++        .first()
++    )
++    if not account:
++        raise HTTPException(status_code=404, detail="Account not found")
++    for field, value in payload.model_dump(exclude_unset=True).items():
++        setattr(account, field, value)
++    db.commit()
++    db.refresh(account)
++    return account
++
++
+ # ----------------------------------------------------------------- periods
+ 
+ @router.post("/fiscal-years", response_model=FiscalYearRead, status_code=201)
+diff --git a/backend/app/api/v1/banking.py b/backend/app/api/v1/banking.py
+index a607a19..830cc20 100644
+--- a/backend/app/api/v1/banking.py
++++ b/backend/app/api/v1/banking.py
+@@ -17,6 +17,7 @@ from app.models.user import User, UserBusinessRole
+ from app.schemas.banking import (
+     BankAccountCreate,
+     BankAccountRead,
++    BankAccountUpdate,
+     BankReconciliationRead,
+     BankReconciliationRequest,
+     CashDisbursementCreate,
+@@ -81,6 +82,29 @@ def list_bank_accounts(
+     return db.query(BankAccount).filter(BankAccount.business_id == business_id).order_by(BankAccount.name).all()
+ 
+ 
++@router.put("/bank-accounts/{bank_account_id}", response_model=BankAccountRead)
++def update_bank_account(
++    business_id: str,
++    bank_account_id: str,
++    payload: BankAccountUpdate,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    account = (
++        db.query(BankAccount)
++        .filter(BankAccount.id == bank_account_id, BankAccount.business_id == business_id)
++        .first()
++    )
++    if not account:
++        raise HTTPException(status_code=404, detail="Bank account not found")
++    for field, value in payload.model_dump(exclude_unset=True).items():
++        setattr(account, field, value)
++    db.commit()
++    db.refresh(account)
++    return account
++
++
+ # --------------------------------------------------------------- receipts
+ 
+ @router.post("/cash-receipts", response_model=CashReceiptRead, status_code=201)
+diff --git a/backend/app/api/v1/fixed_assets.py b/backend/app/api/v1/fixed_assets.py
+index dff7ac3..306fe6a 100644
+--- a/backend/app/api/v1/fixed_assets.py
++++ b/backend/app/api/v1/fixed_assets.py
+@@ -17,6 +17,7 @@ from app.schemas.fixed_assets import (
+     DepreciationScheduleRowRead,
+     FixedAssetCreate,
+     FixedAssetRead,
++    FixedAssetUpdate,
+ )
+ from app.services.fixed_assets import (
+     FixedAssetError,
+@@ -82,6 +83,38 @@ def list_fixed_assets(
+     )
+ 
+ 
++@router.put("/fixed-assets/{asset_id}", response_model=FixedAssetRead)
++def update_fixed_asset(
++    business_id: str,
++    asset_id: str,
++    payload: FixedAssetUpdate,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    asset = (
++        db.query(FixedAsset)
++        .filter(FixedAsset.id == asset_id, FixedAsset.business_id == business_id)
++        .first()
++    )
++    if not asset:
++        raise HTTPException(status_code=404, detail="Fixed asset not found")
++    updates = payload.model_dump(exclude_unset=True)
++    if "asset_code" in updates and updates["asset_code"] != asset.asset_code:
++        clash = (
++            db.query(FixedAsset)
++            .filter(FixedAsset.business_id == business_id, FixedAsset.asset_code == updates["asset_code"])
++            .first()
++        )
++        if clash:
++            raise HTTPException(status_code=400, detail=f"Asset code '{updates['asset_code']}' already exists.")
++    for field, value in updates.items():
++        setattr(asset, field, value)
++    db.commit()
++    db.refresh(asset)
++    return asset
++
++
+ @router.get("/fixed-assets/{asset_id}/schedule", response_model=list[DepreciationScheduleRowRead])
+ def depreciation_schedule(
+     business_id: str,
+diff --git a/backend/app/api/v1/inventory.py b/backend/app/api/v1/inventory.py
+index d9a326a..66c134b 100644
+--- a/backend/app/api/v1/inventory.py
++++ b/backend/app/api/v1/inventory.py
+@@ -17,6 +17,7 @@ from app.models.user import User, UserBusinessRole
+ from app.schemas.inventory import (
+     InventoryItemCreate,
+     InventoryItemRead,
++    InventoryItemUpdate,
+     StockAdjustmentCreate,
+     StockMovementRead,
+ )
+@@ -80,6 +81,38 @@ def list_inventory_items(
+     )
+ 
+ 
++@router.put("/inventory-items/{item_id}", response_model=InventoryItemRead)
++def update_inventory_item(
++    business_id: str,
++    item_id: str,
++    payload: InventoryItemUpdate,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    item = (
++        db.query(InventoryItem)
++        .filter(InventoryItem.id == item_id, InventoryItem.business_id == business_id)
++        .first()
++    )
++    if not item:
++        raise HTTPException(status_code=404, detail="Inventory item not found")
++    updates = payload.model_dump(exclude_unset=True)
++    if "sku" in updates and updates["sku"] != item.sku:
++        clash = (
++            db.query(InventoryItem)
++            .filter(InventoryItem.business_id == business_id, InventoryItem.sku == updates["sku"])
++            .first()
++        )
++        if clash:
++            raise HTTPException(status_code=400, detail=f"SKU '{updates['sku']}' already exists.")
++    for field, value in updates.items():
++        setattr(item, field, value)
++    db.commit()
++    db.refresh(item)
++    return item
++
++
+ @router.get("/inventory-items/{item_id}/movements", response_model=list[StockMovementRead])
+ def list_stock_movements(
+     business_id: str,
+diff --git a/backend/app/api/v1/purchases.py b/backend/app/api/v1/purchases.py
+index 0c771dc..16c8286 100644
+--- a/backend/app/api/v1/purchases.py
++++ b/backend/app/api/v1/purchases.py
+@@ -17,6 +17,7 @@ from app.schemas.purchases import (
+     PurchaseBillRead,
+     VendorCreate,
+     VendorRead,
++    VendorUpdate,
+ )
+ from app.services.purchases import BillLineInput, PurchasePostingError, create_draft_bill, post_bill
+ 
+@@ -67,6 +68,48 @@ def list_vendors(
+     return db.query(Vendor).filter(Vendor.business_id == business_id).order_by(Vendor.name).all()
+ 
+ 
++def _get_vendor_or_404(business_id: str, vendor_id: str, db: Session) -> Vendor:
++    vendor = (
++        db.query(Vendor)
++        .filter(Vendor.id == vendor_id, Vendor.business_id == business_id)
++        .first()
++    )
++    if not vendor:
++        raise HTTPException(status_code=404, detail="Vendor not found")
++    return vendor
++
++
++@router.put("/vendors/{vendor_id}", response_model=VendorRead)
++def update_vendor(
++    business_id: str,
++    vendor_id: str,
++    payload: VendorUpdate,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    vendor = _get_vendor_or_404(business_id, vendor_id, db)
++    for field, value in payload.model_dump(exclude_unset=True).items():
++        setattr(vendor, field, value)
++    db.commit()
++    db.refresh(vendor)
++    return vendor
++
++
++@router.delete("/vendors/{vendor_id}", status_code=204)
++def delete_vendor(
++    business_id: str,
++    vendor_id: str,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    vendor = _get_vendor_or_404(business_id, vendor_id, db)
++    db.delete(vendor)
++    db.commit()
++    return None
++
++
+ # ----------------------------------------------------------- purchase bills
+ 
+ @router.post("/purchase-bills", response_model=PurchaseBillRead, status_code=201)
+diff --git a/backend/app/api/v1/sales.py b/backend/app/api/v1/sales.py
+index ee30054..d6be150 100644
+--- a/backend/app/api/v1/sales.py
++++ b/backend/app/api/v1/sales.py
+@@ -19,6 +19,7 @@ from app.models.user import User, UserBusinessRole
+ from app.schemas.sales import (
+     CustomerCreate,
+     CustomerRead,
++    CustomerUpdate,
+     SalesInvoiceCreate,
+     SalesInvoiceRead,
+ )
+@@ -71,6 +72,48 @@ def list_customers(
+     return db.query(Customer).filter(Customer.business_id == business_id).order_by(Customer.name).all()
+ 
+ 
++def _get_customer_or_404(business_id: str, customer_id: str, db: Session) -> Customer:
++    customer = (
++        db.query(Customer)
++        .filter(Customer.id == customer_id, Customer.business_id == business_id)
++        .first()
++    )
++    if not customer:
++        raise HTTPException(status_code=404, detail="Customer not found")
++    return customer
++
++
++@router.put("/customers/{customer_id}", response_model=CustomerRead)
++def update_customer(
++    business_id: str,
++    customer_id: str,
++    payload: CustomerUpdate,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    customer = _get_customer_or_404(business_id, customer_id, db)
++    for field, value in payload.model_dump(exclude_unset=True).items():
++        setattr(customer, field, value)
++    db.commit()
++    db.refresh(customer)
++    return customer
++
++
++@router.delete("/customers/{customer_id}", status_code=204)
++def delete_customer(
++    business_id: str,
++    customer_id: str,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    customer = _get_customer_or_404(business_id, customer_id, db)
++    db.delete(customer)
++    db.commit()
++    return None
++
++
+ # ---------------------------------------------------------- sales invoices
+ 
+ @router.post("/sales-invoices", response_model=SalesInvoiceRead, status_code=201)
+diff --git a/backend/app/api/v1/tax.py b/backend/app/api/v1/tax.py
+index aa7832c..da3b495 100644
+--- a/backend/app/api/v1/tax.py
++++ b/backend/app/api/v1/tax.py
+@@ -20,6 +20,7 @@ from app.schemas.tax import (
+     TaxCalculationResponse,
+     TaxRuleCreate,
+     TaxRuleRead,
++    TaxRuleUpdate,
+ )
+ from app.tax.engine.calculator import calculate_tax
+ from app.tax.engine.rules import TaxRuleNotFoundError
+@@ -74,6 +75,29 @@ def list_tax_rules(
+     )
+ 
+ 
++@router.put("/{rule_id}", response_model=TaxRuleRead)
++def update_tax_rule(
++    business_id: str,
++    rule_id: str,
++    payload: TaxRuleUpdate,
++    db: Session = Depends(get_db),
++    current_user: User = Depends(get_current_user),
++):
++    _get_authorized_business(business_id, db, current_user)
++    rule = (
++        db.query(TaxRule)
++        .filter(TaxRule.id == rule_id, TaxRule.business_id == business_id)
++        .first()
++    )
++    if not rule:
++        raise HTTPException(status_code=404, detail="Tax rule not found")
++    for field, value in payload.model_dump(exclude_unset=True).items():
++        setattr(rule, field, value)
++    db.commit()
++    db.refresh(rule)
++    return rule
++
++
+ @router.patch("/{rule_id}/retire", response_model=TaxRuleRead)
+ def retire_tax_rule(
+     business_id: str,
+diff --git a/backend/app/schemas/accounting.py b/backend/app/schemas/accounting.py
+index 038de18..78b8f75 100644
+--- a/backend/app/schemas/accounting.py
++++ b/backend/app/schemas/accounting.py
+@@ -22,6 +22,21 @@ class AccountCreate(BaseModel):
+         return v
+ 
+ 
++class AccountUpdate(BaseModel):
++    """
++    Deliberately narrower than AccountCreate: code and account_type are
++    excluded because journal lines and financial-statement grouping key
++    off them, so changing either after the account has postings would
++    silently reclassify historical transactions. Renaming, adding a
++    description, or toggling is_active never touches the ledger.
++    """
++
++    name: str | None = None
++    description: str | None = None
++    default_tax_treatment: str | None = None
++    is_active: bool | None = None
++
++
+ class AccountRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/backend/app/schemas/banking.py b/backend/app/schemas/banking.py
+index 87ca797..7aa019e 100644
+--- a/backend/app/schemas/banking.py
++++ b/backend/app/schemas/banking.py
+@@ -14,6 +14,13 @@ class BankAccountCreate(BaseModel):
+     opening_balance_date: date | None = None
+ 
+ 
++class BankAccountUpdate(BaseModel):
++    name: str | None = None
++    bank_name: str | None = None
++    account_number: str | None = None
++    currency_code: str | None = None
++
++
+ class BankAccountRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/backend/app/schemas/fixed_assets.py b/backend/app/schemas/fixed_assets.py
+index 7c8dbdc..5f441f9 100644
+--- a/backend/app/schemas/fixed_assets.py
++++ b/backend/app/schemas/fixed_assets.py
+@@ -16,6 +16,20 @@ class FixedAssetCreate(BaseModel):
+     depreciation_expense_account_id: str
+ 
+ 
++class FixedAssetUpdate(BaseModel):
++    """
++    Only asset_code and name are editable. acquisition_cost,
++    salvage_value, useful_life_months, and acquisition_date all feed
++    the depreciation schedule (app/reports/... depreciation logic) --
++    changing them after depreciation entries have already been posted
++    would desync the schedule from the ledger, so those stay locked
++    once created.
++    """
++
++    asset_code: str | None = None
++    name: str | None = None
++
++
+ class FixedAssetRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/backend/app/schemas/inventory.py b/backend/app/schemas/inventory.py
+index a8984ad..1919c45 100644
+--- a/backend/app/schemas/inventory.py
++++ b/backend/app/schemas/inventory.py
+@@ -12,6 +12,14 @@ class InventoryItemCreate(BaseModel):
+     cogs_account_id: str
+ 
+ 
++class InventoryItemUpdate(BaseModel):
++    sku: str | None = None
++    name: str | None = None
++    unit_of_measure: str | None = None
++    inventory_account_id: str | None = None
++    cogs_account_id: str | None = None
++
++
+ class InventoryItemRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/backend/app/schemas/purchases.py b/backend/app/schemas/purchases.py
+index d847840..560450f 100644
+--- a/backend/app/schemas/purchases.py
++++ b/backend/app/schemas/purchases.py
+@@ -14,6 +14,16 @@ class VendorCreate(BaseModel):
+     is_vat_registered: bool = True
+ 
+ 
++class VendorUpdate(BaseModel):
++    name: str | None = None
++    tin: str | None = None
++    address: str | None = None
++    email: str | None = None
++    phone: str | None = None
++    payment_terms_days: int | None = None
++    is_vat_registered: bool | None = None
++
++
+ class VendorRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/backend/app/schemas/sales.py b/backend/app/schemas/sales.py
+index 3a56f70..b471070 100644
+--- a/backend/app/schemas/sales.py
++++ b/backend/app/schemas/sales.py
+@@ -13,6 +13,15 @@ class CustomerCreate(BaseModel):
+     payment_terms_days: int | None = None
+ 
+ 
++class CustomerUpdate(BaseModel):
++    name: str | None = None
++    tin: str | None = None
++    address: str | None = None
++    email: str | None = None
++    phone: str | None = None
++    payment_terms_days: int | None = None
++
++
+ class CustomerRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/backend/app/schemas/tax.py b/backend/app/schemas/tax.py
+index ed2ee72..49024bb 100644
+--- a/backend/app/schemas/tax.py
++++ b/backend/app/schemas/tax.py
+@@ -25,6 +25,25 @@ class TaxRuleCreate(BaseModel):
+         return v
+ 
+ 
++class TaxRuleUpdate(BaseModel):
++    """
++    rule_code, tax_type, and effective_from are excluded: invoice and
++    bill lines reference a rule by its code (tax_rule_code), and the
++    effective date range is what makes a rule the *correct* one for a
++    transaction's date. Everything else -- name, rate, ATC code,
++    end date, citations -- is safe to correct after the fact, since a
++    posted line's tax_amount is already a fixed snapshot and doesn't
++    get recalculated from the rule.
++    """
++
++    name: str | None = None
++    atc_code: str | None = None
++    rate_percent: Decimal | None = None
++    effective_to: date | None = None
++    legal_basis: str | None = None
++    source_reference: str | None = None
++
++
+ class TaxRuleRead(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/backend/tests/test_accounting_api.py b/backend/tests/test_accounting_api.py
+index 19b1b06..e1e8bb4 100644
+--- a/backend/tests/test_accounting_api.py
++++ b/backend/tests/test_accounting_api.py
+@@ -13,6 +13,31 @@ def _register_and_login(client, email="acct@example.com", password="s3cret-pass"
+     return {"Authorization": f"Bearer {token}"}
+ 
+ 
++def test_account_update(client):
++    headers = _register_and_login(client, email="acct-edit@example.com")
++    business_id = client.post(
++        "/api/v1/businesses", headers=headers, json={"registered_name": "Account Edit Co"}
++    ).json()["id"]
++
++    account = client.post(
++        f"/api/v1/businesses/{business_id}/accounts",
++        headers=headers,
++        json={"code": "5000", "name": "Office Supplies", "account_type": "Expense"},
++    ).json()
++
++    updated = client.put(
++        f"/api/v1/businesses/{business_id}/accounts/{account['id']}",
++        headers=headers,
++        json={"name": "Office Supplies Expense", "is_active": False},
++    )
++    assert updated.status_code == 200
++    assert updated.json()["name"] == "Office Supplies Expense"
++    assert updated.json()["is_active"] is False
++    # code and account_type are untouched by a partial update.
++    assert updated.json()["code"] == "5000"
++    assert updated.json()["account_type"] == "Expense"
++
++
+ def test_full_accounting_acceptance_flow(client):
+     headers = _register_and_login(client)
+ 
+diff --git a/backend/tests/test_banking_api.py b/backend/tests/test_banking_api.py
+index 7616f7d..41fae0f 100644
+--- a/backend/tests/test_banking_api.py
++++ b/backend/tests/test_banking_api.py
+@@ -14,6 +14,33 @@ def _register_and_login(client, email="banking@example.com", password="s3cret-pa
+     return {"Authorization": f"Bearer {token}"}
+ 
+ 
++def test_bank_account_update(client):
++    headers = _register_and_login(client, email="bank-edit@example.com")
++    business_id = client.post(
++        "/api/v1/businesses", headers=headers, json={"registered_name": "Bank Edit Co"}
++    ).json()["id"]
++    gl_account = client.post(
++        f"/api/v1/businesses/{business_id}/accounts",
++        headers=headers,
++        json={"code": "1000", "name": "Cash in Bank", "account_type": "Asset"},
++    ).json()
++
++    bank_account = client.post(
++        f"/api/v1/businesses/{business_id}/bank-accounts",
++        headers=headers,
++        json={"name": "Main Checking", "gl_account_id": gl_account["id"]},
++    ).json()
++
++    updated = client.put(
++        f"/api/v1/businesses/{business_id}/bank-accounts/{bank_account['id']}",
++        headers=headers,
++        json={"name": "Main Checking (BDO)", "bank_name": "BDO"},
++    )
++    assert updated.status_code == 200
++    assert updated.json()["name"] == "Main Checking (BDO)"
++    assert updated.json()["bank_name"] == "BDO"
++
++
+ def test_full_banking_acceptance_flow(client):
+     headers = _register_and_login(client)
+ 
+diff --git a/backend/tests/test_inventory_api.py b/backend/tests/test_inventory_api.py
+index 56841dd..b1b28b4 100644
+--- a/backend/tests/test_inventory_api.py
++++ b/backend/tests/test_inventory_api.py
+@@ -13,6 +13,43 @@ def _register_and_login(client, email="inventory@example.com", password="s3cret-
+     return {"Authorization": f"Bearer {token}"}
+ 
+ 
++def test_inventory_item_update(client):
++    headers = _register_and_login(client, email="inventory-edit@example.com")
++    business_id = client.post(
++        "/api/v1/businesses", headers=headers, json={"registered_name": "Inventory Edit Co"}
++    ).json()["id"]
++    inv_account = client.post(
++        f"/api/v1/businesses/{business_id}/accounts",
++        headers=headers,
++        json={"code": "1300", "name": "Inventory", "account_type": "Asset"},
++    ).json()
++    cogs_account = client.post(
++        f"/api/v1/businesses/{business_id}/accounts",
++        headers=headers,
++        json={"code": "5100", "name": "COGS", "account_type": "Expense"},
++    ).json()
++
++    item = client.post(
++        f"/api/v1/businesses/{business_id}/inventory-items",
++        headers=headers,
++        json={
++            "sku": "SKU-001",
++            "name": "Widget",
++            "inventory_account_id": inv_account["id"],
++            "cogs_account_id": cogs_account["id"],
++        },
++    ).json()
++
++    updated = client.put(
++        f"/api/v1/businesses/{business_id}/inventory-items/{item['id']}",
++        headers=headers,
++        json={"name": "Widget (Deluxe)", "unit_of_measure": "pcs"},
++    )
++    assert updated.status_code == 200
++    assert updated.json()["name"] == "Widget (Deluxe)"
++    assert updated.json()["unit_of_measure"] == "pcs"
++
++
+ def test_full_inventory_acceptance_flow(client):
+     headers = _register_and_login(client)
+ 
+diff --git a/backend/tests/test_purchases_api.py b/backend/tests/test_purchases_api.py
+index 76a9f6c..555cbb9 100644
+--- a/backend/tests/test_purchases_api.py
++++ b/backend/tests/test_purchases_api.py
+@@ -13,6 +13,38 @@ def _register_and_login(client, email="purchases@example.com", password="s3cret-
+     return {"Authorization": f"Bearer {token}"}
+ 
+ 
++def test_vendor_update_and_delete(client):
++    headers = _register_and_login(client, email="vendors@example.com")
++    business_id = client.post(
++        "/api/v1/businesses", headers=headers, json={"registered_name": "Vendor Edit Co"}
++    ).json()["id"]
++
++    vendor = client.post(
++        f"/api/v1/businesses/{business_id}/vendors",
++        headers=headers,
++        json={"name": "Original Supplier", "is_vat_registered": True},
++    ).json()
++
++    updated = client.put(
++        f"/api/v1/businesses/{business_id}/vendors/{vendor['id']}",
++        headers=headers,
++        json={"name": "Renamed Supplier", "is_vat_registered": False},
++    )
++    assert updated.status_code == 200
++    assert updated.json()["name"] == "Renamed Supplier"
++    assert updated.json()["is_vat_registered"] is False
++
++    deleted = client.delete(
++        f"/api/v1/businesses/{business_id}/vendors/{vendor['id']}", headers=headers
++    )
++    assert deleted.status_code == 204
++
++    listing_after_delete = client.get(
++        f"/api/v1/businesses/{business_id}/vendors", headers=headers
++    ).json()
++    assert listing_after_delete == []
++
++
+ def test_full_purchases_acceptance_flow(client):
+     headers = _register_and_login(client)
+ 
+diff --git a/backend/tests/test_sales_api.py b/backend/tests/test_sales_api.py
+index fa195c5..7b9a034 100644
+--- a/backend/tests/test_sales_api.py
++++ b/backend/tests/test_sales_api.py
+@@ -13,6 +13,44 @@ def _register_and_login(client, email="sales@example.com", password="s3cret-pass
+     return {"Authorization": f"Bearer {token}"}
+ 
+ 
++def test_customer_update_and_delete(client):
++    headers = _register_and_login(client, email="customers@example.com")
++    business_id = client.post(
++        "/api/v1/businesses", headers=headers, json={"registered_name": "Customer Edit Co"}
++    ).json()["id"]
++
++    customer = client.post(
++        f"/api/v1/businesses/{business_id}/customers",
++        headers=headers,
++        json={"name": "Original Name", "email": "orig@example.com"},
++    ).json()
++
++    updated = client.put(
++        f"/api/v1/businesses/{business_id}/customers/{customer['id']}",
++        headers=headers,
++        json={"name": "Renamed Customer", "tin": "123-456-789"},
++    )
++    assert updated.status_code == 200
++    assert updated.json()["name"] == "Renamed Customer"
++    assert updated.json()["tin"] == "123-456-789"
++    # Fields not included in the payload are left untouched.
++    assert updated.json()["email"] == "orig@example.com"
++
++    listing = client.get(f"/api/v1/businesses/{business_id}/customers", headers=headers).json()
++    assert len(listing) == 1
++    assert listing[0]["name"] == "Renamed Customer"
++
++    deleted = client.delete(
++        f"/api/v1/businesses/{business_id}/customers/{customer['id']}", headers=headers
++    )
++    assert deleted.status_code == 204
++
++    listing_after_delete = client.get(
++        f"/api/v1/businesses/{business_id}/customers", headers=headers
++    ).json()
++    assert listing_after_delete == []
++
++
+ def test_full_sales_acceptance_flow(client):
+     headers = _register_and_login(client)
+ 
+diff --git a/frontend/src/assets/main.css b/frontend/src/assets/main.css
+new file mode 100644
+index 0000000..455aa64
+--- /dev/null
++++ b/frontend/src/assets/main.css
+@@ -0,0 +1,424 @@
++/* ==========================================================================
++   Design tokens -- modeled on manager.io: a plain, dense, utilitarian
++   accounting UI. Single sans-serif face throughout (no serif, no mono
++   signature), a muted blue accent, flat panels with thin borders
++   instead of shadows/rounded cards, and dense tables with text-link
++   row actions rather than icon buttons.
++   ========================================================================== */
++:root {
++  --sidebar-bg: #eef1f4;
++  --sidebar-border: #d7dce1;
++  --sidebar-text: #2c3540;
++  --sidebar-text-muted: #6b7684;
++  --sidebar-active-bg: #dbe9f8;
++  --sidebar-active-text: #1a5da3;
++
++  --paper: #f4f5f7;
++  --surface: #ffffff;
++  --border: #d9dee3;
++  --border-light: #e8ebee;
++
++  --blue: #2569a8;
++  --blue-dark: #184c81;
++  --blue-tint: #eaf2fa;
++
++  --text: #212933;
++  --text-muted: #667080;
++
++  --danger: #b3382b;
++  --danger-tint: #f9e9e7;
++  --success: #2e7d4f;
++  --success-tint: #e6f3ea;
++  --warning: #a0680f;
++  --warning-tint: #faf1de;
++
++  --radius: 3px;
++
++  --font-body: "Segoe UI", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, sans-serif;
++
++  --bs-body-font-family: var(--font-body);
++  --bs-body-color: var(--text);
++  --bs-body-bg: var(--paper);
++  --bs-primary: var(--blue);
++  --bs-primary-rgb: 37, 105, 168;
++  --bs-border-radius: var(--radius);
++  --bs-border-radius-sm: 2px;
++  --bs-link-color: var(--blue);
++  --bs-link-hover-color: var(--blue-dark);
++  --bs-font-size-base: 0.875rem;
++}
++
++* {
++  box-sizing: border-box;
++}
++
++body {
++  background: var(--paper);
++  color: var(--text);
++  font-size: 0.875rem;
++  -webkit-font-smoothing: antialiased;
++}
++
++h1, h2, h3, h4, h5, h6 {
++  font-family: var(--font-body);
++  font-weight: 600;
++  color: var(--text);
++  letter-spacing: 0;
++}
++
++h4 { font-size: 1.15rem; }
++
++a {
++  text-decoration: none;
++}
++a:hover {
++  text-decoration: underline;
++}
++
++/* Plain page-title eyebrow -- small, uppercase, muted, no serif/mono flourish */
++.eyebrow {
++  display: inline-block;
++  font-size: 0.7rem;
++  font-weight: 600;
++  letter-spacing: 0.04em;
++  text-transform: uppercase;
++  color: var(--text-muted);
++  margin-bottom: 0.15rem;
++}
++
++/* Figures just get right-alignment via .text-end in markup; no special
++   numeric font -- manager.io keeps numbers in the same sans face. */
++.figure,
++.font-mono {
++  font-family: var(--font-body);
++}
++
++/* ==========================================================================
++   App shell: light flat sidebar + plain topbar
++   ========================================================================== */
++.app-shell {
++  display: flex;
++  min-height: 100vh;
++}
++
++.app-sidebar {
++  width: 232px;
++  flex-shrink: 0;
++  background: var(--sidebar-bg);
++  color: var(--sidebar-text);
++  border-right: 1px solid var(--sidebar-border);
++  display: flex;
++  flex-direction: column;
++  position: sticky;
++  top: 0;
++  height: 100vh;
++  overflow-y: auto;
++}
++
++.app-sidebar__brand {
++  display: flex;
++  align-items: center;
++  gap: 0.5rem;
++  padding: 0.9rem 1rem;
++  font-weight: 700;
++  font-size: 0.95rem;
++  color: var(--blue-dark);
++  border-bottom: 1px solid var(--sidebar-border);
++}
++
++.app-sidebar__brand .bi {
++  color: var(--blue);
++  font-size: 1.05rem;
++}
++
++.app-sidebar__section {
++  padding: 0.85rem 1rem 0.25rem;
++  font-size: 0.68rem;
++  font-weight: 700;
++  letter-spacing: 0.04em;
++  text-transform: uppercase;
++  color: var(--sidebar-text-muted);
++}
++
++.app-sidebar__link {
++  display: flex;
++  align-items: center;
++  gap: 0.55rem;
++  padding: 0.38rem 1rem;
++  color: var(--sidebar-text);
++  text-decoration: none;
++  font-size: 0.85rem;
++  border-left: 3px solid transparent;
++}
++
++.app-sidebar__link .bi {
++  width: 1rem;
++  text-align: center;
++  font-size: 0.85rem;
++  color: var(--sidebar-text-muted);
++}
++
++.app-sidebar__link:hover {
++  background: #e3e7ec;
++  text-decoration: none;
++}
++
++.app-sidebar__link.router-link-active {
++  background: var(--sidebar-active-bg);
++  color: var(--sidebar-active-text);
++  border-left-color: var(--blue);
++  font-weight: 600;
++}
++
++.app-sidebar__link.router-link-active .bi {
++  color: var(--sidebar-active-text);
++}
++
++.app-topbar {
++  position: sticky;
++  top: 0;
++  z-index: 10;
++  display: flex;
++  align-items: center;
++  gap: 0.75rem;
++  padding: 0.55rem 1.5rem;
++  background: var(--surface);
++  border-bottom: 1px solid var(--border);
++}
++
++.app-main {
++  flex: 1;
++  min-width: 0;
++  padding: 1.25rem 1.5rem 2.5rem;
++}
++
++/* ==========================================================================
++   Panels, tables, badges, forms -- flat, dense, bordered (no shadows)
++   ========================================================================== */
++.card {
++  background: var(--surface);
++  border: 1px solid var(--border);
++  border-radius: var(--radius);
++  box-shadow: none;
++}
++
++.card-ledger {
++  border-top: 1px solid var(--border);
++}
++
++.table {
++  --bs-table-bg: transparent;
++  font-size: 0.83rem;
++  margin-bottom: 0;
++}
++
++.table thead th {
++  font-size: 0.72rem;
++  font-weight: 700;
++  color: var(--text-muted);
++  background: #f6f7f9;
++  border-bottom: 1px solid var(--border);
++  padding: 0.45rem 0.6rem;
++}
++
++.table td {
++  vertical-align: middle;
++  border-color: var(--border-light);
++  padding: 0.4rem 0.6rem;
++}
++
++.table-hover tbody tr:hover {
++  background: var(--blue-tint);
++}
++
++.table-striped tbody tr:nth-of-type(odd) {
++  background: #fafbfc;
++}
++
++.table-actions {
++  white-space: nowrap;
++  text-align: right;
++  width: 1%;
++}
++
++/* Row actions as plain text links, manager.io-style, instead of icon buttons */
++.row-action-links {
++  display: inline-flex;
++  gap: 0.6rem;
++}
++
++.row-action-link {
++  border: none;
++  background: transparent;
++  padding: 0;
++  color: var(--blue);
++  font-size: 0.8rem;
++  font-weight: 500;
++}
++
++.row-action-link:hover {
++  text-decoration: underline;
++  color: var(--blue-dark);
++}
++
++.row-action-link--danger {
++  color: var(--danger);
++}
++
++.row-action-link--danger:hover {
++  color: #8a2b20;
++}
++
++/* Kept for spots not yet converted to text links */
++.icon-btn {
++  border: none;
++  background: transparent;
++  color: var(--text-muted);
++  width: 28px;
++  height: 28px;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  border-radius: var(--radius);
++}
++
++.icon-btn:hover {
++  background: var(--paper);
++  color: var(--text);
++}
++
++.icon-btn--danger:hover {
++  background: var(--danger-tint);
++  color: var(--danger);
++}
++
++.badge-pill {
++  display: inline-flex;
++  align-items: center;
++  gap: 0.3rem;
++  padding: 0.15rem 0.5rem;
++  border-radius: 2px;
++  font-size: 0.72rem;
++  font-weight: 600;
++}
++
++.badge-pill--green {
++  background: var(--success-tint);
++  color: var(--success);
++}
++
++.badge-pill--gold {
++  background: var(--warning-tint);
++  color: var(--warning);
++}
++
++.badge-pill--muted {
++  background: #eef0f2;
++  color: var(--text-muted);
++}
++
++.btn {
++  border-radius: var(--radius);
++  font-weight: 500;
++  font-size: 0.83rem;
++  padding: 0.32rem 0.75rem;
++}
++
++.btn-primary {
++  background: var(--blue);
++  border-color: var(--blue);
++}
++
++.btn-primary:hover,
++.btn-primary:focus {
++  background: var(--blue-dark);
++  border-color: var(--blue-dark);
++}
++
++.btn-outline-primary {
++  color: var(--blue);
++  border-color: var(--blue);
++}
++
++.btn-outline-primary:hover {
++  background: var(--blue);
++  border-color: var(--blue);
++}
++
++.form-control,
++.form-select {
++  border-color: var(--border);
++  border-radius: var(--radius);
++  font-size: 0.85rem;
++}
++
++.form-control:focus,
++.form-select:focus {
++  border-color: var(--blue);
++  box-shadow: 0 0 0 0.15rem rgba(37, 105, 168, 0.15);
++}
++
++.form-label {
++  font-size: 0.78rem;
++  font-weight: 600;
++  color: var(--text-muted);
++  margin-bottom: 0.25rem;
++}
++
++/* ==========================================================================
++   Modals -- flat, bordered, no big drop shadow
++   ========================================================================== */
++.modal-content {
++  border: 1px solid var(--border);
++  border-radius: var(--radius);
++  box-shadow: 0 4px 16px rgba(20, 30, 45, 0.18);
++}
++
++.modal-header {
++  border-bottom: 1px solid var(--border);
++  padding: 0.85rem 1.1rem;
++  background: #f6f7f9;
++}
++
++.modal-header .modal-title {
++  font-size: 0.98rem;
++  font-weight: 700;
++}
++
++.modal-body {
++  padding: 1.1rem;
++}
++
++.modal-footer {
++  border-top: 1px solid var(--border);
++  padding: 0.7rem 1.1rem;
++}
++
++.modal-backdrop.show {
++  opacity: 0.35;
++  background: #1a2634;
++}
++
++/* Page header row used across list views */
++.page-header {
++  display: flex;
++  align-items: flex-end;
++  justify-content: space-between;
++  margin-bottom: 1rem;
++  flex-wrap: wrap;
++  gap: 0.6rem;
++}
++
++.empty-state {
++  padding: 2rem 1rem;
++  text-align: center;
++  color: var(--text-muted);
++  font-size: 0.85rem;
++}
++
++.empty-state .bi {
++  font-size: 1.4rem;
++  color: var(--border);
++  display: block;
++  margin-bottom: 0.4rem;
++}
+diff --git a/frontend/src/components/ConfirmDialog.vue b/frontend/src/components/ConfirmDialog.vue
+new file mode 100644
+index 0000000..f06649c
+--- /dev/null
++++ b/frontend/src/components/ConfirmDialog.vue
+@@ -0,0 +1,38 @@
++<template>
++  <teleport to="body">
++    <div v-if="show" class="modal-backdrop show"></div>
++    <div v-if="show" class="modal d-block" tabindex="-1" @click.self="$emit('cancel')">
++      <div class="modal-dialog modal-sm">
++        <div class="modal-content">
++          <div class="modal-header">
++            <h5 class="modal-title">{{ title }}</h5>
++            <button type="button" class="btn-close" @click="$emit('cancel')"></button>
++          </div>
++          <div class="modal-body">
++            <p class="mb-0">{{ message }}</p>
++          </div>
++          <div class="modal-footer">
++            <button type="button" class="btn btn-outline-secondary" @click="$emit('cancel')">
++              Cancel
++            </button>
++            <button type="button" class="btn btn-danger" :disabled="busy" @click="$emit('confirm')">
++              <span v-if="busy" class="spinner-border spinner-border-sm me-1"></span>
++              {{ confirmLabel }}
++            </button>
++          </div>
++        </div>
++      </div>
++    </div>
++  </teleport>
++</template>
++
++<script setup>
++defineProps({
++  show: { type: Boolean, default: false },
++  title: { type: String, default: "Are you sure?" },
++  message: { type: String, default: "This action can't be undone." },
++  confirmLabel: { type: String, default: "Delete" },
++  busy: { type: Boolean, default: false },
++});
++defineEmits(["confirm", "cancel"]);
++</script>
+diff --git a/frontend/src/components/EntityFormModal.vue b/frontend/src/components/EntityFormModal.vue
+new file mode 100644
+index 0000000..7f36bb5
+--- /dev/null
++++ b/frontend/src/components/EntityFormModal.vue
+@@ -0,0 +1,109 @@
++<template>
++  <teleport to="body">
++    <div v-if="show" class="modal-backdrop show"></div>
++    <div v-if="show" class="modal d-block" tabindex="-1" @click.self="onCancel">
++      <div class="modal-dialog">
++        <form class="modal-content" @submit.prevent="onSubmit">
++          <div class="modal-header">
++            <h5 class="modal-title">{{ title }}</h5>
++            <button type="button" class="btn-close" @click="onCancel"></button>
++          </div>
++
++          <div class="modal-body">
++            <div class="row g-3">
++              <div v-for="field in fields" :key="field.key" :class="field.colClass || 'col-12'">
++                <label class="form-label">{{ field.label }}</label>
++
++                <select
++                  v-if="field.type === 'select'"
++                  v-model="form[field.key]"
++                  class="form-select"
++                  :required="field.required"
++                >
++                  <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
++                    {{ opt.label }}
++                  </option>
++                </select>
++
++                <div v-else-if="field.type === 'checkbox'" class="form-check mt-2">
++                  <input
++                    :id="field.key"
++                    v-model="form[field.key]"
++                    type="checkbox"
++                    class="form-check-input"
++                  />
++                  <label :for="field.key" class="form-check-label">{{ field.checkLabel }}</label>
++                </div>
++
++                <input
++                  v-else
++                  v-model="form[field.key]"
++                  :type="field.type || 'text'"
++                  class="form-control"
++                  :placeholder="field.placeholder"
++                  :required="field.required"
++                />
++
++                <div v-if="field.hint" class="form-text">{{ field.hint }}</div>
++              </div>
++            </div>
++
++            <div v-if="error" class="alert alert-danger py-2 small mt-3 mb-0">{{ error }}</div>
++          </div>
++
++          <div class="modal-footer">
++            <button type="button" class="btn btn-outline-secondary" @click="onCancel">
++              Cancel
++            </button>
++            <button type="submit" class="btn btn-primary" :disabled="submitting">
++              <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
++              {{ submitLabel }}
++            </button>
++          </div>
++        </form>
++      </div>
++    </div>
++  </teleport>
++</template>
++
++<script setup>
++import { reactive, watch } from "vue";
++
++const props = defineProps({
++  show: { type: Boolean, default: false },
++  title: { type: String, required: true },
++  fields: { type: Array, required: true },
++  initialValues: { type: Object, default: () => ({}) },
++  submitting: { type: Boolean, default: false },
++  error: { type: String, default: "" },
++  submitLabel: { type: String, default: "Save" },
++});
++
++const emit = defineEmits(["update:show", "submit"]);
++
++const form = reactive({});
++
++function resetForm() {
++  for (const field of props.fields) {
++    form[field.key] = props.initialValues[field.key] ?? (field.type === "checkbox" ? false : "");
++  }
++}
++
++// Re-seed the form every time the modal is opened, so editing a second
++// row never shows stale values from whatever was open before.
++watch(
++  () => props.show,
++  (isOpen) => {
++    if (isOpen) resetForm();
++  },
++  { immediate: true }
++);
++
++function onCancel() {
++  emit("update:show", false);
++}
++
++function onSubmit() {
++  emit("submit", { ...form });
++}
++</script>
+diff --git a/frontend/src/composables/useCrudResource.js b/frontend/src/composables/useCrudResource.js
+new file mode 100644
+index 0000000..a12e33c
+--- /dev/null
++++ b/frontend/src/composables/useCrudResource.js
+@@ -0,0 +1,66 @@
++/**
++ * useCrudResource
++ *
++ * Shared list/create/update/delete logic for the "master data" screens
++ * (customers, vendors, and similar business-scoped resources that hang
++ * off /businesses/{id}/<resource>). A view using this only needs to
++ * supply the API path and, optionally, how to turn a row into a
++ * display label for the delete confirmation.
++ *
++ * Every call is scoped to businessStore.activeBusinessId and the list
++ * automatically reloads when the active business changes.
++ */
++import { ref, watch, onMounted } from "vue";
++import api from "../services/api";
++import { useBusinessStore } from "../stores/business";
++
++export function useCrudResource(resourcePath) {
++  const businessStore = useBusinessStore();
++
++  const items = ref([]);
++  const loading = ref(false);
++  const error = ref("");
++
++  function basePath() {
++    return `/businesses/${businessStore.activeBusinessId}${resourcePath}`;
++  }
++
++  async function load() {
++    if (!businessStore.activeBusinessId) {
++      items.value = [];
++      return;
++    }
++    loading.value = true;
++    error.value = "";
++    try {
++      const { data } = await api.get(basePath());
++      items.value = data;
++    } catch (err) {
++      error.value = err.response?.data?.detail || "Could not load data.";
++    } finally {
++      loading.value = false;
++    }
++  }
++
++  async function create(payload) {
++    const { data } = await api.post(basePath(), payload);
++    await load();
++    return data;
++  }
++
++  async function update(id, payload) {
++    const { data } = await api.put(`${basePath()}/${id}`, payload);
++    await load();
++    return data;
++  }
++
++  async function remove(id) {
++    await api.delete(`${basePath()}/${id}`);
++    await load();
++  }
++
++  onMounted(load);
++  watch(() => businessStore.activeBusinessId, load);
++
++  return { items, loading, error, load, create, update, remove };
++}
+diff --git a/frontend/src/layouts/DefaultLayout.vue b/frontend/src/layouts/DefaultLayout.vue
+index 8ec8d2e..268a7b7 100644
+--- a/frontend/src/layouts/DefaultLayout.vue
++++ b/frontend/src/layouts/DefaultLayout.vue
+@@ -1,78 +1,101 @@
+ <template>
+-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
+-    <span class="navbar-brand">
+-      <i class="bi bi-calculator me-2"></i>Philippine Accounting System
+-    </span>
++  <div class="app-shell">
++    <aside class="app-sidebar" v-if="businessStore.businesses.length">
++      <div class="app-sidebar__brand">
++        <i class="bi bi-book"></i>
++        <span>PH Accounting</span>
++      </div>
+ 
+-    <div class="navbar-nav flex-row gap-1 ms-4" v-if="businessStore.businesses.length">
+-      <router-link to="/" class="nav-link px-2">Dashboard</router-link>
++      <nav class="pb-4">
++        <router-link to="/" class="app-sidebar__link">
++          <i class="bi bi-speedometer2"></i> Dashboard
++        </router-link>
+ 
+-      <div class="nav-item dropdown">
+-        <a class="nav-link dropdown-toggle px-2" href="#" role="button" data-bs-toggle="dropdown">Accounting</a>
+-        <ul class="dropdown-menu dropdown-menu-dark">
+-          <li><router-link to="/accounts" class="dropdown-item">Chart of Accounts</router-link></li>
+-          <li><router-link to="/journal-entries/new" class="dropdown-item">New Journal Entry</router-link></li>
+-          <li><router-link to="/reports/trial-balance" class="dropdown-item">Trial Balance</router-link></li>
+-          <li><router-link to="/tax-rules" class="dropdown-item">Tax Rules</router-link></li>
+-        </ul>
+-      </div>
++        <div class="app-sidebar__section">Accounting</div>
++        <router-link to="/accounts" class="app-sidebar__link">
++          <i class="bi bi-diagram-3"></i> Chart of Accounts
++        </router-link>
++        <router-link to="/journal-entries/new" class="app-sidebar__link">
++          <i class="bi bi-pencil-square"></i> New Journal Entry
++        </router-link>
++        <router-link to="/reports/trial-balance" class="app-sidebar__link">
++          <i class="bi bi-clipboard-data"></i> Trial Balance
++        </router-link>
++        <router-link to="/tax-rules" class="app-sidebar__link">
++          <i class="bi bi-percent"></i> Tax Rules
++        </router-link>
+ 
+-      <div class="nav-item dropdown">
+-        <a class="nav-link dropdown-toggle px-2" href="#" role="button" data-bs-toggle="dropdown">Sales</a>
+-        <ul class="dropdown-menu dropdown-menu-dark">
+-          <li><router-link to="/customers" class="dropdown-item">Customers</router-link></li>
+-          <li><router-link to="/sales-invoices" class="dropdown-item">Sales Invoices</router-link></li>
+-        </ul>
+-      </div>
++        <div class="app-sidebar__section">Sales</div>
++        <router-link to="/customers" class="app-sidebar__link">
++          <i class="bi bi-people"></i> Customers
++        </router-link>
++        <router-link to="/sales-invoices" class="app-sidebar__link">
++          <i class="bi bi-receipt"></i> Sales Invoices
++        </router-link>
+ 
+-      <div class="nav-item dropdown">
+-        <a class="nav-link dropdown-toggle px-2" href="#" role="button" data-bs-toggle="dropdown">Purchases</a>
+-        <ul class="dropdown-menu dropdown-menu-dark">
+-          <li><router-link to="/vendors" class="dropdown-item">Vendors</router-link></li>
+-          <li><router-link to="/purchase-bills" class="dropdown-item">Purchase Bills</router-link></li>
+-        </ul>
+-      </div>
++        <div class="app-sidebar__section">Purchases</div>
++        <router-link to="/vendors" class="app-sidebar__link">
++          <i class="bi bi-truck"></i> Vendors
++        </router-link>
++        <router-link to="/purchase-bills" class="app-sidebar__link">
++          <i class="bi bi-file-earmark-text"></i> Purchase Bills
++        </router-link>
+ 
+-      <div class="nav-item dropdown">
+-        <a class="nav-link dropdown-toggle px-2" href="#" role="button" data-bs-toggle="dropdown">Banking</a>
+-        <ul class="dropdown-menu dropdown-menu-dark">
+-          <li><router-link to="/bank-accounts" class="dropdown-item">Bank Accounts</router-link></li>
+-          <li><router-link to="/cash-receipts" class="dropdown-item">Cash Receipts</router-link></li>
+-          <li><router-link to="/cash-disbursements" class="dropdown-item">Payments</router-link></li>
+-        </ul>
+-      </div>
++        <div class="app-sidebar__section">Banking</div>
++        <router-link to="/bank-accounts" class="app-sidebar__link">
++          <i class="bi bi-bank"></i> Bank Accounts
++        </router-link>
++        <router-link to="/cash-receipts" class="app-sidebar__link">
++          <i class="bi bi-cash-coin"></i> Cash Receipts
++        </router-link>
++        <router-link to="/cash-disbursements" class="app-sidebar__link">
++          <i class="bi bi-credit-card"></i> Payments
++        </router-link>
+ 
+-      <router-link to="/bir" class="nav-link px-2">BIR</router-link>
+-      <router-link to="/inventory-items" class="nav-link px-2">Inventory</router-link>
+-      <router-link to="/fixed-assets" class="nav-link px-2">Fixed Assets</router-link>
+-      <router-link to="/financial-statements" class="nav-link px-2">Statements</router-link>
+-    </div>
++        <div class="app-sidebar__section">More</div>
++        <router-link to="/bir" class="app-sidebar__link">
++          <i class="bi bi-flag"></i> BIR Reports
++        </router-link>
++        <router-link to="/inventory-items" class="app-sidebar__link">
++          <i class="bi bi-box-seam"></i> Inventory
++        </router-link>
++        <router-link to="/fixed-assets" class="app-sidebar__link">
++          <i class="bi bi-building"></i> Fixed Assets
++        </router-link>
++        <router-link to="/financial-statements" class="app-sidebar__link">
++          <i class="bi bi-graph-up"></i> Statements
++        </router-link>
++      </nav>
++    </aside>
+ 
+-    <div class="ms-auto d-flex align-items-center gap-3">
+-      <select
+-        v-if="businessStore.businesses.length"
+-        class="form-select form-select-sm w-auto"
+-        :value="businessStore.activeBusinessId"
+-        @change="onSwitchBusiness"
+-      >
+-        <option v-for="b in businessStore.businesses" :key="b.id" :value="b.id">
+-          {{ b.business_name || b.registered_name }}
+-        </option>
+-      </select>
++    <div class="flex-grow-1 d-flex flex-column">
++      <header class="app-topbar" v-if="businessStore.businesses.length">
++        <select
++          class="form-select form-select-sm w-auto"
++          :value="businessStore.activeBusinessId"
++          @change="onSwitchBusiness"
++        >
++          <option v-for="b in businessStore.businesses" :key="b.id" :value="b.id">
++            {{ b.business_name || b.registered_name }}
++          </option>
++        </select>
+ 
+-      <router-link to="/business/new" class="btn btn-sm btn-outline-light">
+-        <i class="bi bi-plus-lg"></i> New Business
+-      </router-link>
++        <router-link to="/business/new" class="btn btn-sm btn-outline-primary">
++          <i class="bi bi-plus-lg"></i> New Business
++        </router-link>
+ 
+-      <button class="btn btn-sm btn-outline-light" @click="onLogout">
+-        <i class="bi bi-box-arrow-right"></i> Log out
+-      </button>
+-    </div>
+-  </nav>
++        <div class="ms-auto d-flex align-items-center gap-2">
++          <button class="btn btn-sm btn-outline-secondary" @click="onLogout">
++            <i class="bi bi-box-arrow-right"></i> Log out
++          </button>
++        </div>
++      </header>
+ 
+-  <main class="container-fluid p-4">
+-    <router-view />
+-  </main>
++      <main class="app-main flex-grow-1">
++        <router-view />
++      </main>
++    </div>
++  </div>
+ </template>
+ 
+ <script setup>
+diff --git a/frontend/src/main.js b/frontend/src/main.js
+index d4c699e..c99b070 100644
+--- a/frontend/src/main.js
++++ b/frontend/src/main.js
+@@ -2,6 +2,7 @@ import { createApp } from "vue";
+ import { createPinia } from "pinia";
+ import App from "./App.vue";
+ import router from "./router";
++import "./assets/main.css";
+ 
+ const app = createApp(App);
+ app.use(createPinia());
+diff --git a/frontend/src/views/CashDisbursementsView.vue b/frontend/src/views/CashDisbursementsView.vue
+index ac5eacb..68ff7d7 100644
+--- a/frontend/src/views/CashDisbursementsView.vue
++++ b/frontend/src/views/CashDisbursementsView.vue
+@@ -2,6 +2,7 @@
+   <div class="row g-4">
+     <div class="col-lg-6">
+       <h4>Cash Disbursements</h4>
++      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+       <table class="table table-sm table-hover bg-white">
+         <thead>
+           <tr>
+@@ -23,7 +24,13 @@
+               </span>
+             </td>
+             <td class="text-end">
+-              <button v-if="d.status === 'Draft'" class="btn btn-sm btn-outline-primary" @click="onPost(d.id)">
++              <button
++                v-if="d.status === 'Draft'"
++                class="btn btn-sm btn-outline-primary"
++                :disabled="postingId === d.id"
++                @click="onPost(d.id)"
++              >
++                <span v-if="postingId === d.id" class="spinner-border spinner-border-sm me-1"></span>
+                 Post
+               </button>
+             </td>
+@@ -98,6 +105,8 @@ const vendors = ref([]);
+ const bills = ref([]);
+ const error = ref("");
+ const submitting = ref(false);
++const postError = ref("");
++const postingId = ref(null);
+ 
+ const postedBills = computed(() => bills.value.filter((b) => b.status === "Posted"));
+ 
+@@ -150,8 +159,16 @@ async function onCreate() {
+ }
+ 
+ async function onPost(disbursementId) {
+-  await api.post(`/businesses/${businessStore.activeBusinessId}/cash-disbursements/${disbursementId}/post`);
+-  await loadAll();
++  postError.value = "";
++  postingId.value = disbursementId;
++  try {
++    await api.post(`/businesses/${businessStore.activeBusinessId}/cash-disbursements/${disbursementId}/post`);
++    await loadAll();
++  } catch (err) {
++    postError.value = err.response?.data?.detail || "Could not post payment.";
++  } finally {
++    postingId.value = null;
++  }
+ }
+ 
+ onMounted(loadAll);
+diff --git a/frontend/src/views/CashReceiptsView.vue b/frontend/src/views/CashReceiptsView.vue
+index 5a13dc1..1bb2396 100644
+--- a/frontend/src/views/CashReceiptsView.vue
++++ b/frontend/src/views/CashReceiptsView.vue
+@@ -2,6 +2,7 @@
+   <div class="row g-4">
+     <div class="col-lg-6">
+       <h4>Cash Receipts</h4>
++      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+       <table class="table table-sm table-hover bg-white">
+         <thead>
+           <tr>
+@@ -23,7 +24,13 @@
+               </span>
+             </td>
+             <td class="text-end">
+-              <button v-if="r.status === 'Draft'" class="btn btn-sm btn-outline-primary" @click="onPost(r.id)">
++              <button
++                v-if="r.status === 'Draft'"
++                class="btn btn-sm btn-outline-primary"
++                :disabled="postingId === r.id"
++                @click="onPost(r.id)"
++              >
++                <span v-if="postingId === r.id" class="spinner-border spinner-border-sm me-1"></span>
+                 Post
+               </button>
+             </td>
+@@ -98,6 +105,8 @@ const customers = ref([]);
+ const invoices = ref([]);
+ const error = ref("");
+ const submitting = ref(false);
++const postError = ref("");
++const postingId = ref(null);
+ 
+ const unpaidInvoices = computed(() => invoices.value.filter((i) => i.status === "Posted"));
+ 
+@@ -152,8 +161,16 @@ async function onCreate() {
+ }
+ 
+ async function onPost(receiptId) {
+-  await api.post(`/businesses/${businessStore.activeBusinessId}/cash-receipts/${receiptId}/post`);
+-  await loadAll();
++  postError.value = "";
++  postingId.value = receiptId;
++  try {
++    await api.post(`/businesses/${businessStore.activeBusinessId}/cash-receipts/${receiptId}/post`);
++    await loadAll();
++  } catch (err) {
++    postError.value = err.response?.data?.detail || "Could not post receipt.";
++  } finally {
++    postingId.value = null;
++  }
+ }
+ 
+ onMounted(loadAll);
+diff --git a/frontend/src/views/CustomersView.vue b/frontend/src/views/CustomersView.vue
+index dffcdfc..5fc7bef 100644
+--- a/frontend/src/views/CustomersView.vue
++++ b/frontend/src/views/CustomersView.vue
+@@ -1,96 +1,138 @@
+ <template>
+   <div>
+-    <div class="d-flex justify-content-between align-items-center mb-3">
+-      <h4 class="mb-0">Customers</h4>
+-      <button class="btn btn-primary btn-sm" @click="showForm = !showForm">
+-        <i class="bi bi-plus-lg"></i> New Customer
++    <div class="page-header">
++      <div>
++        <span class="eyebrow">Sales · Master data</span>
++        <h4 class="mb-0">Customers</h4>
++      </div>
++      <button class="btn btn-primary btn-sm" @click="openCreate">
++        <i class="bi bi-plus-lg"></i> New customer
+       </button>
+     </div>
+ 
+-    <form v-if="showForm" @submit.prevent="onCreate" class="card p-3 mb-4">
+-      <div class="row g-2">
+-        <div class="col-md-4">
+-          <label class="form-label">Name</label>
+-          <input v-model="form.name" class="form-control" required />
+-        </div>
+-        <div class="col-md-3">
+-          <label class="form-label">TIN</label>
+-          <input v-model="form.tin" class="form-control" />
+-        </div>
+-        <div class="col-md-3">
+-          <label class="form-label">Email</label>
+-          <input v-model="form.email" type="email" class="form-control" />
+-        </div>
+-        <div class="col-md-2 d-flex align-items-end">
+-          <button type="submit" class="btn btn-success w-100" :disabled="submitting">Add</button>
+-        </div>
+-        <div class="col-12">
+-          <label class="form-label">Address</label>
+-          <input v-model="form.address" class="form-control" />
+-        </div>
++    <div class="card">
++      <table class="table table-hover mb-0">
++        <thead>
++          <tr>
++            <th class="ps-3">Name</th>
++            <th>TIN</th>
++            <th>Email</th>
++            <th>Phone</th>
++            <th class="table-actions pe-3">Actions</th>
++          </tr>
++        </thead>
++        <tbody>
++          <tr v-for="c in items" :key="c.id">
++            <td class="ps-3 fw-medium">{{ c.name }}</td>
++            <td class="figure text-muted">{{ c.tin || "—" }}</td>
++            <td class="text-muted">{{ c.email || "—" }}</td>
++            <td class="figure text-muted">{{ c.phone || "—" }}</td>
++            <td class="table-actions pe-3">
++              <span class="row-action-links">
++                <button class="row-action-link" @click="openEdit(c)">Edit</button>
++                <button class="row-action-link row-action-link--danger" @click="askDelete(c)">Delete</button>
++              </span>
++            </td>
++          </tr>
++        </tbody>
++      </table>
++
++      <div v-if="!loading && !items.length" class="empty-state">
++        <i class="bi bi-people"></i>
++        No customers yet. Add your first one to start invoicing.
+       </div>
+-      <div v-if="error" class="alert alert-danger py-2 small mt-2 mb-0">{{ error }}</div>
+-    </form>
++    </div>
++
++    <EntityFormModal
++      v-model:show="showForm"
++      :title="editingId ? 'Edit customer' : 'New customer'"
++      :fields="fields"
++      :initial-values="formInitialValues"
++      :submitting="submitting"
++      :error="formError"
++      :submit-label="editingId ? 'Save changes' : 'Add customer'"
++      @submit="onSubmit"
++    />
+ 
+-    <table class="table table-sm table-hover bg-white">
+-      <thead>
+-        <tr>
+-          <th>Name</th>
+-          <th>TIN</th>
+-          <th>Email</th>
+-        </tr>
+-      </thead>
+-      <tbody>
+-        <tr v-for="c in customers" :key="c.id">
+-          <td>{{ c.name }}</td>
+-          <td class="text-muted">{{ c.tin || "—" }}</td>
+-          <td class="text-muted">{{ c.email || "—" }}</td>
+-        </tr>
+-        <tr v-if="!customers.length">
+-          <td colspan="3" class="text-muted text-center py-3">No customers yet.</td>
+-        </tr>
+-      </tbody>
+-    </table>
++    <ConfirmDialog
++      :show="!!pendingDelete"
++      title="Delete customer"
++      :message="pendingDelete ? `Delete ${pendingDelete.name}? This can't be undone.` : ''"
++      :busy="deleting"
++      @confirm="confirmDelete"
++      @cancel="pendingDelete = null"
++    />
+   </div>
+ </template>
+ 
+ <script setup>
+-import { onMounted, reactive, ref, watch } from "vue";
+-import api from "../services/api";
+-import { useBusinessStore } from "../stores/business";
++import { ref } from "vue";
++import EntityFormModal from "../components/EntityFormModal.vue";
++import ConfirmDialog from "../components/ConfirmDialog.vue";
++import { useCrudResource } from "../composables/useCrudResource";
++
++const { items, loading, create, update, remove } = useCrudResource("/customers");
++
++const fields = [
++  { key: "name", label: "Name", required: true, colClass: "col-md-8" },
++  { key: "tin", label: "TIN", colClass: "col-md-4" },
++  { key: "email", label: "Email", type: "email", colClass: "col-md-6" },
++  { key: "phone", label: "Phone", colClass: "col-md-6" },
++  { key: "address", label: "Address", colClass: "col-12" },
++];
+ 
+-const businessStore = useBusinessStore();
+-const customers = ref([]);
+ const showForm = ref(false);
++const editingId = ref(null);
+ const submitting = ref(false);
+-const error = ref("");
++const formError = ref("");
++const formInitialValues = ref({});
++
++const pendingDelete = ref(null);
++const deleting = ref(false);
+ 
+-const form = reactive({ name: "", tin: "", email: "", address: "" });
++function openCreate() {
++  editingId.value = null;
++  formInitialValues.value = {};
++  formError.value = "";
++  showForm.value = true;
++}
+ 
+-async function loadCustomers() {
+-  if (!businessStore.activeBusinessId) return;
+-  const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/customers`);
+-  customers.value = data;
++function openEdit(customer) {
++  editingId.value = customer.id;
++  formInitialValues.value = { ...customer };
++  formError.value = "";
++  showForm.value = true;
+ }
+ 
+-async function onCreate() {
+-  error.value = "";
++async function onSubmit(values) {
++  formError.value = "";
+   submitting.value = true;
+   try {
+-    await api.post(`/businesses/${businessStore.activeBusinessId}/customers`, form);
+-    form.name = "";
+-    form.tin = "";
+-    form.email = "";
+-    form.address = "";
++    if (editingId.value) {
++      await update(editingId.value, values);
++    } else {
++      await create(values);
++    }
+     showForm.value = false;
+-    await loadCustomers();
+   } catch (err) {
+-    error.value = err.response?.data?.detail || "Could not create customer.";
++    formError.value = err.response?.data?.detail || "Could not save customer.";
+   } finally {
+     submitting.value = false;
+   }
+ }
+ 
+-onMounted(loadCustomers);
+-watch(() => businessStore.activeBusinessId, loadCustomers);
++function askDelete(customer) {
++  pendingDelete.value = customer;
++}
++
++async function confirmDelete() {
++  if (!pendingDelete.value) return;
++  deleting.value = true;
++  try {
++    await remove(pendingDelete.value.id);
++    pendingDelete.value = null;
++  } finally {
++    deleting.value = false;
++  }
++}
+ </script>
+diff --git a/frontend/src/views/PurchaseBillsView.vue b/frontend/src/views/PurchaseBillsView.vue
+index da3cdd5..70e9220 100644
+--- a/frontend/src/views/PurchaseBillsView.vue
++++ b/frontend/src/views/PurchaseBillsView.vue
+@@ -2,6 +2,7 @@
+   <div class="row g-4">
+     <div class="col-lg-7">
+       <h4>Purchase Bills</h4>
++      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+       <table class="table table-sm table-hover bg-white">
+         <thead>
+           <tr>
+@@ -26,8 +27,10 @@
+               <button
+                 v-if="bill.status === 'Draft'"
+                 class="btn btn-sm btn-outline-primary"
++                :disabled="postingId === bill.id"
+                 @click="onPost(bill.id)"
+               >
++                <span v-if="postingId === bill.id" class="spinner-border spinner-border-sm me-1"></span>
+                 Post
+               </button>
+             </td>
+@@ -119,6 +122,8 @@ const taxRules = ref([]);
+ const items = ref([]);
+ const error = ref("");
+ const submitting = ref(false);
++const postError = ref("");
++const postingId = ref(null);
+ 
+ const vatRules = computed(() => taxRules.value.filter((r) => r.tax_type === "VAT"));
+ const withholdingRules = computed(() => taxRules.value.filter((r) => r.tax_type === "Withholding"));
+@@ -206,8 +211,16 @@ async function onCreate() {
+ }
+ 
+ async function onPost(billId) {
+-  await api.post(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${billId}/post`);
+-  await loadAll();
++  postError.value = "";
++  postingId.value = billId;
++  try {
++    await api.post(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${billId}/post`);
++    await loadAll();
++  } catch (err) {
++    postError.value = err.response?.data?.detail || "Could not post bill.";
++  } finally {
++    postingId.value = null;
++  }
+ }
+ 
+ onMounted(loadAll);
+diff --git a/frontend/src/views/SalesInvoicesView.vue b/frontend/src/views/SalesInvoicesView.vue
+index 3f999b6..516eb26 100644
+--- a/frontend/src/views/SalesInvoicesView.vue
++++ b/frontend/src/views/SalesInvoicesView.vue
+@@ -2,6 +2,7 @@
+   <div class="row g-4">
+     <div class="col-lg-7">
+       <h4>Sales Invoices</h4>
++      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+       <table class="table table-sm table-hover bg-white">
+         <thead>
+           <tr>
+@@ -26,8 +27,10 @@
+               <button
+                 v-if="inv.status === 'Draft'"
+                 class="btn btn-sm btn-outline-primary"
++                :disabled="postingId === inv.id"
+                 @click="onPost(inv.id)"
+               >
++                <span v-if="postingId === inv.id" class="spinner-border spinner-border-sm me-1"></span>
+                 Post
+               </button>
+             </td>
+@@ -113,6 +116,8 @@ const taxRules = ref([]);
+ const items = ref([]);
+ const error = ref("");
+ const submitting = ref(false);
++const postError = ref("");
++const postingId = ref(null);
+ 
+ const form = reactive({
+   customer_id: "",
+@@ -164,8 +169,16 @@ async function onCreate() {
+ }
+ 
+ async function onPost(invoiceId) {
+-  await api.post(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${invoiceId}/post`);
+-  await loadAll();
++  postError.value = "";
++  postingId.value = invoiceId;
++  try {
++    await api.post(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${invoiceId}/post`);
++    await loadAll();
++  } catch (err) {
++    postError.value = err.response?.data?.detail || "Could not post invoice.";
++  } finally {
++    postingId.value = null;
++  }
+ }
+ 
+ onMounted(loadAll);
+diff --git a/frontend/src/views/VendorsView.vue b/frontend/src/views/VendorsView.vue
+index 5a0529f..b09133a 100644
+--- a/frontend/src/views/VendorsView.vue
++++ b/frontend/src/views/VendorsView.vue
+@@ -1,103 +1,149 @@
+ <template>
+   <div>
+-    <div class="d-flex justify-content-between align-items-center mb-3">
+-      <h4 class="mb-0">Vendors</h4>
+-      <button class="btn btn-primary btn-sm" @click="showForm = !showForm">
+-        <i class="bi bi-plus-lg"></i> New Vendor
++    <div class="page-header">
++      <div>
++        <span class="eyebrow">Purchases · Master data</span>
++        <h4 class="mb-0">Vendors</h4>
++      </div>
++      <button class="btn btn-primary btn-sm" @click="openCreate">
++        <i class="bi bi-plus-lg"></i> New vendor
+       </button>
+     </div>
+ 
+-    <form v-if="showForm" @submit.prevent="onCreate" class="card p-3 mb-4">
+-      <div class="row g-2">
+-        <div class="col-md-4">
+-          <label class="form-label">Name</label>
+-          <input v-model="form.name" class="form-control" required />
+-        </div>
+-        <div class="col-md-3">
+-          <label class="form-label">TIN</label>
+-          <input v-model="form.tin" class="form-control" />
+-        </div>
+-        <div class="col-md-3">
+-          <label class="form-label">Email</label>
+-          <input v-model="form.email" type="email" class="form-control" />
+-        </div>
+-        <div class="col-md-2 d-flex align-items-end">
+-          <button type="submit" class="btn btn-success w-100" :disabled="submitting">Add</button>
+-        </div>
+-        <div class="col-12">
+-          <label class="form-label">Address</label>
+-          <input v-model="form.address" class="form-control" />
+-        </div>
+-        <div class="col-12">
+-          <div class="form-check">
+-            <input v-model="form.is_vat_registered" type="checkbox" class="form-check-input" id="vatReg" />
+-            <label class="form-check-label" for="vatReg">VAT-registered vendor</label>
+-          </div>
+-        </div>
++    <div class="card">
++      <table class="table table-hover mb-0">
++        <thead>
++          <tr>
++            <th class="ps-3">Name</th>
++            <th>TIN</th>
++            <th>VAT status</th>
++            <th>Email</th>
++            <th class="table-actions pe-3">Actions</th>
++          </tr>
++        </thead>
++        <tbody>
++          <tr v-for="v in items" :key="v.id">
++            <td class="ps-3 fw-medium">{{ v.name }}</td>
++            <td class="figure text-muted">{{ v.tin || "—" }}</td>
++            <td>
++              <span class="badge-pill" :class="v.is_vat_registered ? 'badge-pill--green' : 'badge-pill--muted'">
++                {{ v.is_vat_registered ? "VAT-registered" : "Non-VAT" }}
++              </span>
++            </td>
++            <td class="text-muted">{{ v.email || "—" }}</td>
++            <td class="table-actions pe-3">
++              <span class="row-action-links">
++                <button class="row-action-link" @click="openEdit(v)">Edit</button>
++                <button class="row-action-link row-action-link--danger" @click="askDelete(v)">Delete</button>
++              </span>
++            </td>
++          </tr>
++        </tbody>
++      </table>
++
++      <div v-if="!loading && !items.length" class="empty-state">
++        <i class="bi bi-truck"></i>
++        No vendors yet. Add one to start recording purchase bills.
+       </div>
+-      <div v-if="error" class="alert alert-danger py-2 small mt-2 mb-0">{{ error }}</div>
+-    </form>
++    </div>
++
++    <EntityFormModal
++      v-model:show="showForm"
++      :title="editingId ? 'Edit vendor' : 'New vendor'"
++      :fields="fields"
++      :initial-values="formInitialValues"
++      :submitting="submitting"
++      :error="formError"
++      :submit-label="editingId ? 'Save changes' : 'Add vendor'"
++      @submit="onSubmit"
++    />
+ 
+-    <table class="table table-sm table-hover bg-white">
+-      <thead>
+-        <tr>
+-          <th>Name</th>
+-          <th>TIN</th>
+-          <th>VAT Registered</th>
+-        </tr>
+-      </thead>
+-      <tbody>
+-        <tr v-for="v in vendors" :key="v.id">
+-          <td>{{ v.name }}</td>
+-          <td class="text-muted">{{ v.tin || "—" }}</td>
+-          <td>{{ v.is_vat_registered ? "Yes" : "No" }}</td>
+-        </tr>
+-        <tr v-if="!vendors.length">
+-          <td colspan="3" class="text-muted text-center py-3">No vendors yet.</td>
+-        </tr>
+-      </tbody>
+-    </table>
++    <ConfirmDialog
++      :show="!!pendingDelete"
++      title="Delete vendor"
++      :message="pendingDelete ? `Delete ${pendingDelete.name}? This can't be undone.` : ''"
++      :busy="deleting"
++      @confirm="confirmDelete"
++      @cancel="pendingDelete = null"
++    />
+   </div>
+ </template>
+ 
+ <script setup>
+-import { onMounted, reactive, ref, watch } from "vue";
+-import api from "../services/api";
+-import { useBusinessStore } from "../stores/business";
++import { ref } from "vue";
++import EntityFormModal from "../components/EntityFormModal.vue";
++import ConfirmDialog from "../components/ConfirmDialog.vue";
++import { useCrudResource } from "../composables/useCrudResource";
++
++const { items, loading, create, update, remove } = useCrudResource("/vendors");
++
++const fields = [
++  { key: "name", label: "Name", required: true, colClass: "col-md-8" },
++  { key: "tin", label: "TIN", colClass: "col-md-4" },
++  { key: "email", label: "Email", type: "email", colClass: "col-md-6" },
++  { key: "phone", label: "Phone", colClass: "col-md-6" },
++  { key: "address", label: "Address", colClass: "col-12" },
++  {
++    key: "is_vat_registered",
++    type: "checkbox",
++    label: "",
++    checkLabel: "VAT-registered vendor",
++    colClass: "col-12",
++  },
++];
+ 
+-const businessStore = useBusinessStore();
+-const vendors = ref([]);
+ const showForm = ref(false);
++const editingId = ref(null);
+ const submitting = ref(false);
+-const error = ref("");
++const formError = ref("");
++const formInitialValues = ref({});
++
++const pendingDelete = ref(null);
++const deleting = ref(false);
+ 
+-const form = reactive({ name: "", tin: "", email: "", address: "", is_vat_registered: true });
++function openCreate() {
++  editingId.value = null;
++  formInitialValues.value = { is_vat_registered: true };
++  formError.value = "";
++  showForm.value = true;
++}
+ 
+-async function loadVendors() {
+-  if (!businessStore.activeBusinessId) return;
+-  const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/vendors`);
+-  vendors.value = data;
++function openEdit(vendor) {
++  editingId.value = vendor.id;
++  formInitialValues.value = { ...vendor };
++  formError.value = "";
++  showForm.value = true;
+ }
+ 
+-async function onCreate() {
+-  error.value = "";
++async function onSubmit(values) {
++  formError.value = "";
+   submitting.value = true;
+   try {
+-    await api.post(`/businesses/${businessStore.activeBusinessId}/vendors`, form);
+-    form.name = "";
+-    form.tin = "";
+-    form.email = "";
+-    form.address = "";
+-    form.is_vat_registered = true;
++    if (editingId.value) {
++      await update(editingId.value, values);
++    } else {
++      await create(values);
++    }
+     showForm.value = false;
+-    await loadVendors();
+   } catch (err) {
+-    error.value = err.response?.data?.detail || "Could not create vendor.";
++    formError.value = err.response?.data?.detail || "Could not save vendor.";
+   } finally {
+     submitting.value = false;
+   }
+ }
+ 
+-onMounted(loadVendors);
+-watch(() => businessStore.activeBusinessId, loadVendors);
++function askDelete(vendor) {
++  pendingDelete.value = vendor;
++}
++
++async function confirmDelete() {
++  if (!pendingDelete.value) return;
++  deleting.value = true;
++  try {
++    await remove(pendingDelete.value.id);
++    pendingDelete.value = null;
++  } finally {
++    deleting.value = false;
++  }
++}
+ </script>
