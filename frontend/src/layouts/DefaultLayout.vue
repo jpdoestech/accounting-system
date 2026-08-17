@@ -15,6 +15,9 @@
         <router-link to="/accounts" class="app-sidebar__link">
           <i class="bi bi-diagram-3"></i> Chart of Accounts
         </router-link>
+        <router-link to="/fiscal-periods" class="app-sidebar__link">
+          <i class="bi bi-calendar3"></i> Fiscal Periods
+        </router-link>
         <router-link to="/journal-entries/new" class="app-sidebar__link">
           <i class="bi bi-pencil-square"></i> New Journal Entry
         </router-link>

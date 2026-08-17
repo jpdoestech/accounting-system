@@ -40,6 +40,11 @@ const routes = [
         component: () => import("../views/ChartOfAccountsView.vue"),
       },
       {
+        path: "fiscal-periods",
+        name: "fiscal-periods",
+        component: () => import("../views/FiscalPeriodsView.vue"),
+      },
+      {
         path: "accounts/:businessId/:accountId/ledger",
         name: "account-ledger",
         component: () => import("../views/AccountLedgerView.vue"),
