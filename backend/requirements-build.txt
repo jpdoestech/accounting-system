@@ -1,0 +1,6 @@
+# Additional dependencies needed only to build the packaged Windows
+# executable (scripts/build_exe.bat). Not required for normal
+# development (`uvicorn app.main:app --reload`) or for running tests
+# -- keep this separate from requirements.txt so the app's runtime
+# dependency set stays minimal.
+pyinstaller==6.11.1
