@@ -1,146 +1,178 @@
 <template>
   <div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">Tax Rules</h4>
-      <button class="btn btn-primary btn-sm" @click="showForm = !showForm">
-        <i class="bi bi-plus-lg"></i> New Rule
+    <div class="page-header">
+      <div>
+        <span class="eyebrow">Accounting · Master data</span>
+        <h4 class="mb-0">Tax Rules</h4>
+      </div>
+      <button class="btn btn-primary btn-sm" @click="openCreate">
+        <i class="bi bi-plus-lg"></i> New rule
       </button>
     </div>
     <p class="text-muted small">
-      Rules are effective-dated — a transaction always uses the rate in force on its own
-      date, even if the rate has changed since.
+      Rules are effective-dated — a transaction always uses the rate in force on its own date, even
+      if the rate has changed since. Rule code, type, and start date are locked once created since
+      invoice/bill lines reference a rule by its code and date range.
     </p>
 
-    <form v-if="showForm" @submit.prevent="onCreate" class="card p-3 mb-4">
-      <div class="row g-2">
-        <div class="col-md-3">
-          <label class="form-label">Rule Code</label>
-          <input v-model="form.rule_code" class="form-control" placeholder="VAT_STANDARD" required />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Name</label>
-          <input v-model="form.name" class="form-control" required />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Type</label>
-          <select v-model="form.tax_type" class="form-select" required>
-            <option value="">— Select —</option>
-            <option>VAT</option>
-            <option>Withholding</option>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Rate %</label>
-          <input v-model="form.rate_percent" type="number" step="0.0001" class="form-control" required />
-        </div>
-        <div class="col-md-2" v-if="form.tax_type === 'Withholding'">
-          <label class="form-label">ATC Code</label>
-          <input v-model="form.atc_code" class="form-control" placeholder="WC010" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Effective From</label>
-          <input v-model="form.effective_from" type="date" class="form-control" required />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Effective To (optional)</label>
-          <input v-model="form.effective_to" type="date" class="form-control" />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Legal Basis (optional)</label>
-          <input v-model="form.legal_basis" class="form-control" placeholder="e.g. NIRC Sec. 106" />
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="submit" class="btn btn-success w-100" :disabled="submitting">Add Rule</button>
-        </div>
-      </div>
-      <div v-if="error" class="alert alert-danger py-2 small mt-2 mb-0">{{ error }}</div>
-    </form>
+    <div class="card">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Code</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th class="text-end">Rate</th>
+            <th>Effective</th>
+            <th>Status</th>
+            <th class="table-actions pe-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in rules" :key="r.id">
+            <td class="ps-3 figure text-muted">{{ r.rule_code }}</td>
+            <td class="fw-medium">
+              {{ r.name }}
+              <span v-if="r.atc_code" class="text-muted small">({{ r.atc_code }})</span>
+            </td>
+            <td><span class="badge-pill badge-pill--muted">{{ r.tax_type }}</span></td>
+            <td class="text-end figure">{{ r.rate_percent }}%</td>
+            <td class="small text-muted">{{ r.effective_from }} – {{ r.effective_to || "present" }}</td>
+            <td>
+              <span class="badge-pill" :class="r.status === 'Active' ? 'badge-pill--green' : 'badge-pill--muted'">
+                {{ r.status }}
+              </span>
+            </td>
+            <td class="table-actions pe-3">
+              <span class="row-action-links">
+                <button class="row-action-link" @click="openEdit(r)">Edit</button>
+                <button
+                  v-if="r.status === 'Active'"
+                  class="row-action-link row-action-link--danger"
+                  @click="onRetire(r.id)"
+                >
+                  Retire
+                </button>
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-    <table class="table table-sm table-hover bg-white">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th class="text-end">Rate</th>
-          <th>Effective</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="r in rules" :key="r.id">
-          <td class="text-muted">{{ r.rule_code }}</td>
-          <td>{{ r.name }}<span v-if="r.atc_code" class="text-muted small"> ({{ r.atc_code }})</span></td>
-          <td><span class="badge text-bg-light">{{ r.tax_type }}</span></td>
-          <td class="text-end">{{ r.rate_percent }}%</td>
-          <td class="small text-muted">{{ r.effective_from }} – {{ r.effective_to || "present" }}</td>
-          <td>
-            <span :class="r.status === 'Active' ? 'badge text-bg-success' : 'badge text-bg-secondary'">
-              {{ r.status }}
-            </span>
-          </td>
-          <td class="text-end">
-            <button
-              v-if="r.status === 'Active'"
-              class="btn btn-sm btn-outline-secondary"
-              @click="onRetire(r.id)"
-            >
-              Retire
-            </button>
-          </td>
-        </tr>
-        <tr v-if="!rules.length">
-          <td colspan="7" class="text-muted text-center py-3">No tax rules yet.</td>
-        </tr>
-      </tbody>
-    </table>
+      <div v-if="!loading && !rules.length" class="empty-state">
+        <i class="bi bi-percent"></i>
+        No tax rules yet. Add one to apply VAT or withholding tax to invoices and bills.
+      </div>
+    </div>
+
+    <EntityFormModal
+      v-model:show="showForm"
+      :title="editingId ? 'Edit tax rule' : 'New tax rule'"
+      :fields="fields"
+      :initial-values="formInitialValues"
+      :submitting="submitting"
+      :error="formError"
+      :submit-label="editingId ? 'Save changes' : 'Add rule'"
+      @submit="onSubmit"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
+import EntityFormModal from "../components/EntityFormModal.vue";
 
 const businessStore = useBusinessStore();
 const rules = ref([]);
-const showForm = ref(false);
-const submitting = ref(false);
-const error = ref("");
+const loading = ref(true);
 
-const form = reactive({
-  rule_code: "",
-  name: "",
-  tax_type: "",
-  atc_code: "",
-  rate_percent: "",
-  effective_from: "",
-  effective_to: "",
-  legal_basis: "",
-});
+const showForm = ref(false);
+const editingId = ref(null);
+const submitting = ref(false);
+const formError = ref("");
+const formInitialValues = ref({});
+
+const taxTypeOptions = [
+  { value: "VAT", label: "VAT" },
+  { value: "Withholding", label: "Withholding" },
+];
+
+// rule_code, tax_type, and effective_from are only settable at
+// creation -- the backend locks them on edit since invoice/bill lines
+// reference a rule by its code, and the effective date range is what
+// makes a rule the correct one for a transaction's date.
+const createFields = [
+  { key: "rule_code", label: "Rule code", required: true, placeholder: "VAT_STANDARD", colClass: "col-md-4" },
+  { key: "name", label: "Name", required: true, colClass: "col-md-8" },
+  { key: "tax_type", label: "Type", type: "select", required: true, colClass: "col-md-4", options: taxTypeOptions },
+  { key: "rate_percent", label: "Rate %", type: "number", required: true, colClass: "col-md-4" },
+  { key: "atc_code", label: "ATC code (withholding)", placeholder: "WC010", colClass: "col-md-4" },
+  { key: "effective_from", label: "Effective from", type: "date", required: true, colClass: "col-md-6" },
+  { key: "effective_to", label: "Effective to (optional)", type: "date", colClass: "col-md-6" },
+  { key: "legal_basis", label: "Legal basis (optional)", placeholder: "e.g. NIRC Sec. 106", colClass: "col-12" },
+];
+
+const editFields = [
+  { key: "name", label: "Name", required: true, colClass: "col-md-8" },
+  { key: "atc_code", label: "ATC code (withholding)", colClass: "col-md-4" },
+  { key: "rate_percent", label: "Rate %", type: "number", required: true, colClass: "col-md-4" },
+  { key: "effective_to", label: "Effective to (optional)", type: "date", colClass: "col-md-8" },
+  { key: "legal_basis", label: "Legal basis (optional)", colClass: "col-12" },
+  { key: "source_reference", label: "Source reference (optional)", colClass: "col-12" },
+];
+
+const fields = ref(createFields);
 
 async function loadRules() {
-  if (!businessStore.activeBusinessId) return;
-  const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/tax-rules`);
-  rules.value = data;
+  if (!businessStore.activeBusinessId) {
+    rules.value = [];
+    return;
+  }
+  loading.value = true;
+  try {
+    const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/tax-rules`);
+    rules.value = data;
+  } finally {
+    loading.value = false;
+  }
 }
 
-async function onCreate() {
-  error.value = "";
+function openCreate() {
+  editingId.value = null;
+  fields.value = createFields;
+  formInitialValues.value = { tax_type: "", effective_from: new Date().toISOString().slice(0, 10) };
+  formError.value = "";
+  showForm.value = true;
+}
+
+function openEdit(rule) {
+  editingId.value = rule.id;
+  fields.value = editFields;
+  formInitialValues.value = { ...rule };
+  formError.value = "";
+  showForm.value = true;
+}
+
+async function onSubmit(values) {
+  formError.value = "";
   submitting.value = true;
   try {
-    const payload = { ...form };
-    if (!payload.effective_to) delete payload.effective_to;
-    if (!payload.atc_code) delete payload.atc_code;
-    if (!payload.legal_basis) delete payload.legal_basis;
-
-    await api.post(`/businesses/${businessStore.activeBusinessId}/tax-rules`, payload);
-    Object.keys(form).forEach((k) => (form[k] = ""));
+    const businessId = businessStore.activeBusinessId;
+    if (editingId.value) {
+      await api.put(`/businesses/${businessId}/tax-rules/${editingId.value}`, values);
+    } else {
+      const payload = { ...values };
+      if (!payload.effective_to) delete payload.effective_to;
+      if (!payload.atc_code) delete payload.atc_code;
+      if (!payload.legal_basis) delete payload.legal_basis;
+      await api.post(`/businesses/${businessId}/tax-rules`, payload);
+    }
     showForm.value = false;
     await loadRules();
   } catch (err) {
-    error.value = err.response?.data?.detail || "Could not create tax rule.";
+    formError.value = err.response?.data?.detail || "Could not save tax rule.";
   } finally {
     submitting.value = false;
   }
