@@ -53,6 +53,13 @@
         </router-link>
 
         <div class="app-sidebar__section">More</div>
+        <router-link
+          v-if="businessStore.activeBusinessId"
+          :to="{ name: 'business-settings', params: { id: businessStore.activeBusinessId } }"
+          class="app-sidebar__link"
+        >
+          <i class="bi bi-gear"></i> Business Settings
+        </router-link>
         <router-link to="/bir" class="app-sidebar__link">
           <i class="bi bi-flag"></i> BIR Reports
         </router-link>
@@ -82,6 +89,14 @@
 
         <router-link to="/business/new" class="btn btn-sm btn-outline-primary">
           <i class="bi bi-plus-lg"></i> New Business
+        </router-link>
+
+        <router-link
+          v-if="businessStore.activeBusinessId"
+          :to="{ name: 'business-settings', params: { id: businessStore.activeBusinessId } }"
+          class="btn btn-sm btn-outline-secondary"
+        >
+          <i class="bi bi-gear"></i> Business Settings
         </router-link>
 
         <div class="ms-auto d-flex align-items-center gap-2">
