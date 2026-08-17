@@ -2,6 +2,7 @@
   <div class="row g-4">
     <div class="col-lg-7">
       <h4>Purchase Bills</h4>
+      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
       <table class="table table-sm table-hover bg-white">
         <thead>
           <tr>
@@ -26,8 +27,10 @@
               <button
                 v-if="bill.status === 'Draft'"
                 class="btn btn-sm btn-outline-primary"
+                :disabled="postingId === bill.id"
                 @click="onPost(bill.id)"
               >
+                <span v-if="postingId === bill.id" class="spinner-border spinner-border-sm me-1"></span>
                 Post
               </button>
             </td>
@@ -119,6 +122,8 @@ const taxRules = ref([]);
 const items = ref([]);
 const error = ref("");
 const submitting = ref(false);
+const postError = ref("");
+const postingId = ref(null);
 
 const vatRules = computed(() => taxRules.value.filter((r) => r.tax_type === "VAT"));
 const withholdingRules = computed(() => taxRules.value.filter((r) => r.tax_type === "Withholding"));
@@ -206,8 +211,16 @@ async function onCreate() {
 }
 
 async function onPost(billId) {
-  await api.post(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${billId}/post`);
-  await loadAll();
+  postError.value = "";
+  postingId.value = billId;
+  try {
+    await api.post(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${billId}/post`);
+    await loadAll();
+  } catch (err) {
+    postError.value = err.response?.data?.detail || "Could not post bill.";
+  } finally {
+    postingId.value = null;
+  }
 }
 
 onMounted(loadAll);

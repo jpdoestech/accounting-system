@@ -2,6 +2,7 @@
   <div class="row g-4">
     <div class="col-lg-6">
       <h4>Cash Receipts</h4>
+      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
       <table class="table table-sm table-hover bg-white">
         <thead>
           <tr>
@@ -23,7 +24,13 @@
               </span>
             </td>
             <td class="text-end">
-              <button v-if="r.status === 'Draft'" class="btn btn-sm btn-outline-primary" @click="onPost(r.id)">
+              <button
+                v-if="r.status === 'Draft'"
+                class="btn btn-sm btn-outline-primary"
+                :disabled="postingId === r.id"
+                @click="onPost(r.id)"
+              >
+                <span v-if="postingId === r.id" class="spinner-border spinner-border-sm me-1"></span>
                 Post
               </button>
             </td>
@@ -98,6 +105,8 @@ const customers = ref([]);
 const invoices = ref([]);
 const error = ref("");
 const submitting = ref(false);
+const postError = ref("");
+const postingId = ref(null);
 
 const unpaidInvoices = computed(() => invoices.value.filter((i) => i.status === "Posted"));
 
@@ -152,8 +161,16 @@ async function onCreate() {
 }
 
 async function onPost(receiptId) {
-  await api.post(`/businesses/${businessStore.activeBusinessId}/cash-receipts/${receiptId}/post`);
-  await loadAll();
+  postError.value = "";
+  postingId.value = receiptId;
+  try {
+    await api.post(`/businesses/${businessStore.activeBusinessId}/cash-receipts/${receiptId}/post`);
+    await loadAll();
+  } catch (err) {
+    postError.value = err.response?.data?.detail || "Could not post receipt.";
+  } finally {
+    postingId.value = null;
+  }
 }
 
 onMounted(loadAll);

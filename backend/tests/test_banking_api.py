@@ -14,6 +14,33 @@ def _register_and_login(client, email="banking@example.com", password="s3cret-pa
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_bank_account_update(client):
+    headers = _register_and_login(client, email="bank-edit@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Bank Edit Co"}
+    ).json()["id"]
+    gl_account = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "1000", "name": "Cash in Bank", "account_type": "Asset"},
+    ).json()
+
+    bank_account = client.post(
+        f"/api/v1/businesses/{business_id}/bank-accounts",
+        headers=headers,
+        json={"name": "Main Checking", "gl_account_id": gl_account["id"]},
+    ).json()
+
+    updated = client.put(
+        f"/api/v1/businesses/{business_id}/bank-accounts/{bank_account['id']}",
+        headers=headers,
+        json={"name": "Main Checking (BDO)", "bank_name": "BDO"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Main Checking (BDO)"
+    assert updated.json()["bank_name"] == "BDO"
+
+
 def test_full_banking_acceptance_flow(client):
     headers = _register_and_login(client)
 

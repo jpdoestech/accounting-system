@@ -13,6 +13,31 @@ def _register_and_login(client, email="acct@example.com", password="s3cret-pass"
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_account_update(client):
+    headers = _register_and_login(client, email="acct-edit@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Account Edit Co"}
+    ).json()["id"]
+
+    account = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "5000", "name": "Office Supplies", "account_type": "Expense"},
+    ).json()
+
+    updated = client.put(
+        f"/api/v1/businesses/{business_id}/accounts/{account['id']}",
+        headers=headers,
+        json={"name": "Office Supplies Expense", "is_active": False},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Office Supplies Expense"
+    assert updated.json()["is_active"] is False
+    # code and account_type are untouched by a partial update.
+    assert updated.json()["code"] == "5000"
+    assert updated.json()["account_type"] == "Expense"
+
+
 def test_full_accounting_acceptance_flow(client):
     headers = _register_and_login(client)
 

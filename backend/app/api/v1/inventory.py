@@ -17,6 +17,7 @@ from app.models.user import User, UserBusinessRole
 from app.schemas.inventory import (
     InventoryItemCreate,
     InventoryItemRead,
+    InventoryItemUpdate,
     StockAdjustmentCreate,
     StockMovementRead,
 )
@@ -78,6 +79,38 @@ def list_inventory_items(
         .order_by(InventoryItem.sku)
         .all()
     )
+
+
+@router.put("/inventory-items/{item_id}", response_model=InventoryItemRead)
+def update_inventory_item(
+    business_id: str,
+    item_id: str,
+    payload: InventoryItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    item = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.id == item_id, InventoryItem.business_id == business_id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "sku" in updates and updates["sku"] != item.sku:
+        clash = (
+            db.query(InventoryItem)
+            .filter(InventoryItem.business_id == business_id, InventoryItem.sku == updates["sku"])
+            .first()
+        )
+        if clash:
+            raise HTTPException(status_code=400, detail=f"SKU '{updates['sku']}' already exists.")
+    for field, value in updates.items():
+        setattr(item, field, value)
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 @router.get("/inventory-items/{item_id}/movements", response_model=list[StockMovementRead])

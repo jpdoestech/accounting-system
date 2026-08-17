@@ -17,6 +17,7 @@ from app.models.user import User, UserBusinessRole
 from app.schemas.banking import (
     BankAccountCreate,
     BankAccountRead,
+    BankAccountUpdate,
     BankReconciliationRead,
     BankReconciliationRequest,
     CashDisbursementCreate,
@@ -79,6 +80,29 @@ def list_bank_accounts(
 ):
     _get_authorized_business(business_id, db, current_user)
     return db.query(BankAccount).filter(BankAccount.business_id == business_id).order_by(BankAccount.name).all()
+
+
+@router.put("/bank-accounts/{bank_account_id}", response_model=BankAccountRead)
+def update_bank_account(
+    business_id: str,
+    bank_account_id: str,
+    payload: BankAccountUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    account = (
+        db.query(BankAccount)
+        .filter(BankAccount.id == bank_account_id, BankAccount.business_id == business_id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(account, field, value)
+    db.commit()
+    db.refresh(account)
+    return account
 
 
 # --------------------------------------------------------------- receipts

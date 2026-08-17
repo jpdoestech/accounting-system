@@ -14,6 +14,13 @@ class BankAccountCreate(BaseModel):
     opening_balance_date: date | None = None
 
 
+class BankAccountUpdate(BaseModel):
+    name: str | None = None
+    bank_name: str | None = None
+    account_number: str | None = None
+    currency_code: str | None = None
+
+
 class BankAccountRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

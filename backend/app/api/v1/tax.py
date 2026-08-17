@@ -20,6 +20,7 @@ from app.schemas.tax import (
     TaxCalculationResponse,
     TaxRuleCreate,
     TaxRuleRead,
+    TaxRuleUpdate,
 )
 from app.tax.engine.calculator import calculate_tax
 from app.tax.engine.rules import TaxRuleNotFoundError
@@ -72,6 +73,29 @@ def list_tax_rules(
         .order_by(TaxRule.rule_code, TaxRule.effective_from)
         .all()
     )
+
+
+@router.put("/{rule_id}", response_model=TaxRuleRead)
+def update_tax_rule(
+    business_id: str,
+    rule_id: str,
+    payload: TaxRuleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    rule = (
+        db.query(TaxRule)
+        .filter(TaxRule.id == rule_id, TaxRule.business_id == business_id)
+        .first()
+    )
+    if not rule:
+        raise HTTPException(status_code=404, detail="Tax rule not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(rule, field, value)
+    db.commit()
+    db.refresh(rule)
+    return rule
 
 
 @router.patch("/{rule_id}/retire", response_model=TaxRuleRead)

@@ -13,6 +13,43 @@ def _register_and_login(client, email="inventory@example.com", password="s3cret-
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_inventory_item_update(client):
+    headers = _register_and_login(client, email="inventory-edit@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Inventory Edit Co"}
+    ).json()["id"]
+    inv_account = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "1300", "name": "Inventory", "account_type": "Asset"},
+    ).json()
+    cogs_account = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "5100", "name": "COGS", "account_type": "Expense"},
+    ).json()
+
+    item = client.post(
+        f"/api/v1/businesses/{business_id}/inventory-items",
+        headers=headers,
+        json={
+            "sku": "SKU-001",
+            "name": "Widget",
+            "inventory_account_id": inv_account["id"],
+            "cogs_account_id": cogs_account["id"],
+        },
+    ).json()
+
+    updated = client.put(
+        f"/api/v1/businesses/{business_id}/inventory-items/{item['id']}",
+        headers=headers,
+        json={"name": "Widget (Deluxe)", "unit_of_measure": "pcs"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Widget (Deluxe)"
+    assert updated.json()["unit_of_measure"] == "pcs"
+
+
 def test_full_inventory_acceptance_flow(client):
     headers = _register_and_login(client)
 

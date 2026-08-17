@@ -2,6 +2,7 @@
   <div class="row g-4">
     <div class="col-lg-7">
       <h4>Sales Invoices</h4>
+      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
       <table class="table table-sm table-hover bg-white">
         <thead>
           <tr>
@@ -26,8 +27,10 @@
               <button
                 v-if="inv.status === 'Draft'"
                 class="btn btn-sm btn-outline-primary"
+                :disabled="postingId === inv.id"
                 @click="onPost(inv.id)"
               >
+                <span v-if="postingId === inv.id" class="spinner-border spinner-border-sm me-1"></span>
                 Post
               </button>
             </td>
@@ -113,6 +116,8 @@ const taxRules = ref([]);
 const items = ref([]);
 const error = ref("");
 const submitting = ref(false);
+const postError = ref("");
+const postingId = ref(null);
 
 const form = reactive({
   customer_id: "",
@@ -164,8 +169,16 @@ async function onCreate() {
 }
 
 async function onPost(invoiceId) {
-  await api.post(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${invoiceId}/post`);
-  await loadAll();
+  postError.value = "";
+  postingId.value = invoiceId;
+  try {
+    await api.post(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${invoiceId}/post`);
+    await loadAll();
+  } catch (err) {
+    postError.value = err.response?.data?.detail || "Could not post invoice.";
+  } finally {
+    postingId.value = null;
+  }
 }
 
 onMounted(loadAll);

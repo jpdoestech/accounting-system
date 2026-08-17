@@ -16,6 +16,20 @@ class FixedAssetCreate(BaseModel):
     depreciation_expense_account_id: str
 
 
+class FixedAssetUpdate(BaseModel):
+    """
+    Only asset_code and name are editable. acquisition_cost,
+    salvage_value, useful_life_months, and acquisition_date all feed
+    the depreciation schedule (app/reports/... depreciation logic) --
+    changing them after depreciation entries have already been posted
+    would desync the schedule from the ledger, so those stay locked
+    once created.
+    """
+
+    asset_code: str | None = None
+    name: str | None = None
+
+
 class FixedAssetRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

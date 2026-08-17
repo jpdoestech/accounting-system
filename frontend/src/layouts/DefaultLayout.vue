@@ -2,7 +2,7 @@
   <div class="app-shell">
     <aside class="app-sidebar" v-if="businessStore.businesses.length">
       <div class="app-sidebar__brand">
-        <i class="bi bi-book-half"></i>
+        <i class="bi bi-book"></i>
         <span>PH Accounting</span>
       </div>
 

@@ -28,12 +28,10 @@
             <td class="text-muted">{{ c.email || "—" }}</td>
             <td class="figure text-muted">{{ c.phone || "—" }}</td>
             <td class="table-actions pe-3">
-              <button class="icon-btn" title="Edit" @click="openEdit(c)">
-                <i class="bi bi-pencil"></i>
-              </button>
-              <button class="icon-btn icon-btn--danger" title="Delete" @click="askDelete(c)">
-                <i class="bi bi-trash"></i>
-              </button>
+              <span class="row-action-links">
+                <button class="row-action-link" @click="openEdit(c)">Edit</button>
+                <button class="row-action-link row-action-link--danger" @click="askDelete(c)">Delete</button>
+              </span>
             </td>
           </tr>
         </tbody>

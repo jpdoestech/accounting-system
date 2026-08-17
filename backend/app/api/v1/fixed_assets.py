@@ -17,6 +17,7 @@ from app.schemas.fixed_assets import (
     DepreciationScheduleRowRead,
     FixedAssetCreate,
     FixedAssetRead,
+    FixedAssetUpdate,
 )
 from app.services.fixed_assets import (
     FixedAssetError,
@@ -80,6 +81,38 @@ def list_fixed_assets(
         .order_by(FixedAsset.asset_code)
         .all()
     )
+
+
+@router.put("/fixed-assets/{asset_id}", response_model=FixedAssetRead)
+def update_fixed_asset(
+    business_id: str,
+    asset_id: str,
+    payload: FixedAssetUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    asset = (
+        db.query(FixedAsset)
+        .filter(FixedAsset.id == asset_id, FixedAsset.business_id == business_id)
+        .first()
+    )
+    if not asset:
+        raise HTTPException(status_code=404, detail="Fixed asset not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if "asset_code" in updates and updates["asset_code"] != asset.asset_code:
+        clash = (
+            db.query(FixedAsset)
+            .filter(FixedAsset.business_id == business_id, FixedAsset.asset_code == updates["asset_code"])
+            .first()
+        )
+        if clash:
+            raise HTTPException(status_code=400, detail=f"Asset code '{updates['asset_code']}' already exists.")
+    for field, value in updates.items():
+        setattr(asset, field, value)
+    db.commit()
+    db.refresh(asset)
+    return asset
 
 
 @router.get("/fixed-assets/{asset_id}/schedule", response_model=list[DepreciationScheduleRowRead])

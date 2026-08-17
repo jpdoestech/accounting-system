@@ -12,6 +12,14 @@ class InventoryItemCreate(BaseModel):
     cogs_account_id: str
 
 
+class InventoryItemUpdate(BaseModel):
+    sku: str | None = None
+    name: str | None = None
+    unit_of_measure: str | None = None
+    inventory_account_id: str | None = None
+    cogs_account_id: str | None = None
+
+
 class InventoryItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

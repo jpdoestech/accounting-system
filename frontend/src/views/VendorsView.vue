@@ -32,12 +32,10 @@
             </td>
             <td class="text-muted">{{ v.email || "—" }}</td>
             <td class="table-actions pe-3">
-              <button class="icon-btn" title="Edit" @click="openEdit(v)">
-                <i class="bi bi-pencil"></i>
-              </button>
-              <button class="icon-btn icon-btn--danger" title="Delete" @click="askDelete(v)">
-                <i class="bi bi-trash"></i>
-              </button>
+              <span class="row-action-links">
+                <button class="row-action-link" @click="openEdit(v)">Edit</button>
+                <button class="row-action-link row-action-link--danger" @click="askDelete(v)">Delete</button>
+              </span>
             </td>
           </tr>
         </tbody>

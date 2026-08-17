@@ -26,6 +26,7 @@ from app.schemas.accounting import (
     AccountingPeriodRead,
     AccountLedgerRead,
     AccountRead,
+    AccountUpdate,
     FiscalYearCreate,
     FiscalYearRead,
     JournalEntryCreate,
@@ -92,6 +93,29 @@ def list_accounts(
         .order_by(Account.code)
         .all()
     )
+
+
+@router.put("/accounts/{account_id}", response_model=AccountRead)
+def update_account(
+    business_id: str,
+    account_id: str,
+    payload: AccountUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    account = (
+        db.query(Account)
+        .filter(Account.id == account_id, Account.business_id == business_id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(account, field, value)
+    db.commit()
+    db.refresh(account)
+    return account
 
 
 # ----------------------------------------------------------------- periods

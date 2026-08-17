@@ -25,6 +25,25 @@ class TaxRuleCreate(BaseModel):
         return v
 
 
+class TaxRuleUpdate(BaseModel):
+    """
+    rule_code, tax_type, and effective_from are excluded: invoice and
+    bill lines reference a rule by its code (tax_rule_code), and the
+    effective date range is what makes a rule the *correct* one for a
+    transaction's date. Everything else -- name, rate, ATC code,
+    end date, citations -- is safe to correct after the fact, since a
+    posted line's tax_amount is already a fixed snapshot and doesn't
+    get recalculated from the rule.
+    """
+
+    name: str | None = None
+    atc_code: str | None = None
+    rate_percent: Decimal | None = None
+    effective_to: date | None = None
+    legal_basis: str | None = None
+    source_reference: str | None = None
+
+
 class TaxRuleRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -22,6 +22,21 @@ class AccountCreate(BaseModel):
         return v
 
 
+class AccountUpdate(BaseModel):
+    """
+    Deliberately narrower than AccountCreate: code and account_type are
+    excluded because journal lines and financial-statement grouping key
+    off them, so changing either after the account has postings would
+    silently reclassify historical transactions. Renaming, adding a
+    description, or toggling is_active never touches the ledger.
+    """
+
+    name: str | None = None
+    description: str | None = None
+    default_tax_treatment: str | None = None
+    is_active: bool | None = None
+
+
 class AccountRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
