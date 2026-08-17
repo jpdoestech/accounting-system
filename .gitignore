@@ -1,0 +1,36 @@
+# --- Backend (Python) ---
+backend/.venv/
+backend/venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local SQLite dev database
+backend/dev.db
+backend/*.db
+backend/*.db-journal
+
+# Environment files (contain SECRET_KEY, DATABASE_URL, etc.)
+backend/.env
+.env
+.env.local
+
+# PyInstaller build output
+backend/build/
+backend/dist/
+
+# --- Frontend (Node/Vite) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Misc scratch files ---
+*.log
