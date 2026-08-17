@@ -13,6 +13,15 @@ class CustomerCreate(BaseModel):
     payment_terms_days: int | None = None
 
 
+class CustomerUpdate(BaseModel):
+    name: str | None = None
+    tin: str | None = None
+    address: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    payment_terms_days: int | None = None
+
+
 class CustomerRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

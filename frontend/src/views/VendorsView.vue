@@ -1,103 +1,151 @@
 <template>
   <div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">Vendors</h4>
-      <button class="btn btn-primary btn-sm" @click="showForm = !showForm">
-        <i class="bi bi-plus-lg"></i> New Vendor
+    <div class="page-header">
+      <div>
+        <span class="eyebrow">Purchases · Master data</span>
+        <h4 class="mb-0">Vendors</h4>
+      </div>
+      <button class="btn btn-primary btn-sm" @click="openCreate">
+        <i class="bi bi-plus-lg"></i> New vendor
       </button>
     </div>
 
-    <form v-if="showForm" @submit.prevent="onCreate" class="card p-3 mb-4">
-      <div class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label">Name</label>
-          <input v-model="form.name" class="form-control" required />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">TIN</label>
-          <input v-model="form.tin" class="form-control" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Email</label>
-          <input v-model="form.email" type="email" class="form-control" />
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="submit" class="btn btn-success w-100" :disabled="submitting">Add</button>
-        </div>
-        <div class="col-12">
-          <label class="form-label">Address</label>
-          <input v-model="form.address" class="form-control" />
-        </div>
-        <div class="col-12">
-          <div class="form-check">
-            <input v-model="form.is_vat_registered" type="checkbox" class="form-check-input" id="vatReg" />
-            <label class="form-check-label" for="vatReg">VAT-registered vendor</label>
-          </div>
-        </div>
-      </div>
-      <div v-if="error" class="alert alert-danger py-2 small mt-2 mb-0">{{ error }}</div>
-    </form>
+    <div class="card">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Name</th>
+            <th>TIN</th>
+            <th>VAT status</th>
+            <th>Email</th>
+            <th class="table-actions pe-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="v in items" :key="v.id">
+            <td class="ps-3 fw-medium">{{ v.name }}</td>
+            <td class="figure text-muted">{{ v.tin || "—" }}</td>
+            <td>
+              <span class="badge-pill" :class="v.is_vat_registered ? 'badge-pill--green' : 'badge-pill--muted'">
+                {{ v.is_vat_registered ? "VAT-registered" : "Non-VAT" }}
+              </span>
+            </td>
+            <td class="text-muted">{{ v.email || "—" }}</td>
+            <td class="table-actions pe-3">
+              <button class="icon-btn" title="Edit" @click="openEdit(v)">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="icon-btn icon-btn--danger" title="Delete" @click="askDelete(v)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-    <table class="table table-sm table-hover bg-white">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>TIN</th>
-          <th>VAT Registered</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="v in vendors" :key="v.id">
-          <td>{{ v.name }}</td>
-          <td class="text-muted">{{ v.tin || "—" }}</td>
-          <td>{{ v.is_vat_registered ? "Yes" : "No" }}</td>
-        </tr>
-        <tr v-if="!vendors.length">
-          <td colspan="3" class="text-muted text-center py-3">No vendors yet.</td>
-        </tr>
-      </tbody>
-    </table>
+      <div v-if="!loading && !items.length" class="empty-state">
+        <i class="bi bi-truck"></i>
+        No vendors yet. Add one to start recording purchase bills.
+      </div>
+    </div>
+
+    <EntityFormModal
+      v-model:show="showForm"
+      :title="editingId ? 'Edit vendor' : 'New vendor'"
+      :fields="fields"
+      :initial-values="formInitialValues"
+      :submitting="submitting"
+      :error="formError"
+      :submit-label="editingId ? 'Save changes' : 'Add vendor'"
+      @submit="onSubmit"
+    />
+
+    <ConfirmDialog
+      :show="!!pendingDelete"
+      title="Delete vendor"
+      :message="pendingDelete ? `Delete ${pendingDelete.name}? This can't be undone.` : ''"
+      :busy="deleting"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from "vue";
-import api from "../services/api";
-import { useBusinessStore } from "../stores/business";
+import { ref } from "vue";
+import EntityFormModal from "../components/EntityFormModal.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { useCrudResource } from "../composables/useCrudResource";
 
-const businessStore = useBusinessStore();
-const vendors = ref([]);
+const { items, loading, create, update, remove } = useCrudResource("/vendors");
+
+const fields = [
+  { key: "name", label: "Name", required: true, colClass: "col-md-8" },
+  { key: "tin", label: "TIN", colClass: "col-md-4" },
+  { key: "email", label: "Email", type: "email", colClass: "col-md-6" },
+  { key: "phone", label: "Phone", colClass: "col-md-6" },
+  { key: "address", label: "Address", colClass: "col-12" },
+  {
+    key: "is_vat_registered",
+    type: "checkbox",
+    label: "",
+    checkLabel: "VAT-registered vendor",
+    colClass: "col-12",
+  },
+];
+
 const showForm = ref(false);
+const editingId = ref(null);
 const submitting = ref(false);
-const error = ref("");
+const formError = ref("");
+const formInitialValues = ref({});
 
-const form = reactive({ name: "", tin: "", email: "", address: "", is_vat_registered: true });
+const pendingDelete = ref(null);
+const deleting = ref(false);
 
-async function loadVendors() {
-  if (!businessStore.activeBusinessId) return;
-  const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/vendors`);
-  vendors.value = data;
+function openCreate() {
+  editingId.value = null;
+  formInitialValues.value = { is_vat_registered: true };
+  formError.value = "";
+  showForm.value = true;
 }
 
-async function onCreate() {
-  error.value = "";
+function openEdit(vendor) {
+  editingId.value = vendor.id;
+  formInitialValues.value = { ...vendor };
+  formError.value = "";
+  showForm.value = true;
+}
+
+async function onSubmit(values) {
+  formError.value = "";
   submitting.value = true;
   try {
-    await api.post(`/businesses/${businessStore.activeBusinessId}/vendors`, form);
-    form.name = "";
-    form.tin = "";
-    form.email = "";
-    form.address = "";
-    form.is_vat_registered = true;
+    if (editingId.value) {
+      await update(editingId.value, values);
+    } else {
+      await create(values);
+    }
     showForm.value = false;
-    await loadVendors();
   } catch (err) {
-    error.value = err.response?.data?.detail || "Could not create vendor.";
+    formError.value = err.response?.data?.detail || "Could not save vendor.";
   } finally {
     submitting.value = false;
   }
 }
 
-onMounted(loadVendors);
-watch(() => businessStore.activeBusinessId, loadVendors);
+function askDelete(vendor) {
+  pendingDelete.value = vendor;
+}
+
+async function confirmDelete() {
+  if (!pendingDelete.value) return;
+  deleting.value = true;
+  try {
+    await remove(pendingDelete.value.id);
+    pendingDelete.value = null;
+  } finally {
+    deleting.value = false;
+  }
+}
 </script>

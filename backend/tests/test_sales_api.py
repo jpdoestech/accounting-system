@@ -13,6 +13,44 @@ def _register_and_login(client, email="sales@example.com", password="s3cret-pass
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_customer_update_and_delete(client):
+    headers = _register_and_login(client, email="customers@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Customer Edit Co"}
+    ).json()["id"]
+
+    customer = client.post(
+        f"/api/v1/businesses/{business_id}/customers",
+        headers=headers,
+        json={"name": "Original Name", "email": "orig@example.com"},
+    ).json()
+
+    updated = client.put(
+        f"/api/v1/businesses/{business_id}/customers/{customer['id']}",
+        headers=headers,
+        json={"name": "Renamed Customer", "tin": "123-456-789"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Renamed Customer"
+    assert updated.json()["tin"] == "123-456-789"
+    # Fields not included in the payload are left untouched.
+    assert updated.json()["email"] == "orig@example.com"
+
+    listing = client.get(f"/api/v1/businesses/{business_id}/customers", headers=headers).json()
+    assert len(listing) == 1
+    assert listing[0]["name"] == "Renamed Customer"
+
+    deleted = client.delete(
+        f"/api/v1/businesses/{business_id}/customers/{customer['id']}", headers=headers
+    )
+    assert deleted.status_code == 204
+
+    listing_after_delete = client.get(
+        f"/api/v1/businesses/{business_id}/customers", headers=headers
+    ).json()
+    assert listing_after_delete == []
+
+
 def test_full_sales_acceptance_flow(client):
     headers = _register_and_login(client)
 

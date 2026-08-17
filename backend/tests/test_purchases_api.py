@@ -13,6 +13,38 @@ def _register_and_login(client, email="purchases@example.com", password="s3cret-
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_vendor_update_and_delete(client):
+    headers = _register_and_login(client, email="vendors@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Vendor Edit Co"}
+    ).json()["id"]
+
+    vendor = client.post(
+        f"/api/v1/businesses/{business_id}/vendors",
+        headers=headers,
+        json={"name": "Original Supplier", "is_vat_registered": True},
+    ).json()
+
+    updated = client.put(
+        f"/api/v1/businesses/{business_id}/vendors/{vendor['id']}",
+        headers=headers,
+        json={"name": "Renamed Supplier", "is_vat_registered": False},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Renamed Supplier"
+    assert updated.json()["is_vat_registered"] is False
+
+    deleted = client.delete(
+        f"/api/v1/businesses/{business_id}/vendors/{vendor['id']}", headers=headers
+    )
+    assert deleted.status_code == 204
+
+    listing_after_delete = client.get(
+        f"/api/v1/businesses/{business_id}/vendors", headers=headers
+    ).json()
+    assert listing_after_delete == []
+
+
 def test_full_purchases_acceptance_flow(client):
     headers = _register_and_login(client)
 

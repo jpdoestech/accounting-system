@@ -19,6 +19,7 @@ from app.models.user import User, UserBusinessRole
 from app.schemas.sales import (
     CustomerCreate,
     CustomerRead,
+    CustomerUpdate,
     SalesInvoiceCreate,
     SalesInvoiceRead,
 )
@@ -69,6 +70,48 @@ def list_customers(
 ):
     _get_authorized_business(business_id, db, current_user)
     return db.query(Customer).filter(Customer.business_id == business_id).order_by(Customer.name).all()
+
+
+def _get_customer_or_404(business_id: str, customer_id: str, db: Session) -> Customer:
+    customer = (
+        db.query(Customer)
+        .filter(Customer.id == customer_id, Customer.business_id == business_id)
+        .first()
+    )
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return customer
+
+
+@router.put("/customers/{customer_id}", response_model=CustomerRead)
+def update_customer(
+    business_id: str,
+    customer_id: str,
+    payload: CustomerUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    customer = _get_customer_or_404(business_id, customer_id, db)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(customer, field, value)
+    db.commit()
+    db.refresh(customer)
+    return customer
+
+
+@router.delete("/customers/{customer_id}", status_code=204)
+def delete_customer(
+    business_id: str,
+    customer_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    customer = _get_customer_or_404(business_id, customer_id, db)
+    db.delete(customer)
+    db.commit()
+    return None
 
 
 # ---------------------------------------------------------- sales invoices

@@ -14,6 +14,16 @@ class VendorCreate(BaseModel):
     is_vat_registered: bool = True
 
 
+class VendorUpdate(BaseModel):
+    name: str | None = None
+    tin: str | None = None
+    address: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    payment_terms_days: int | None = None
+    is_vat_registered: bool | None = None
+
+
 class VendorRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

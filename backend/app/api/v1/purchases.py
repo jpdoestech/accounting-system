@@ -17,6 +17,7 @@ from app.schemas.purchases import (
     PurchaseBillRead,
     VendorCreate,
     VendorRead,
+    VendorUpdate,
 )
 from app.services.purchases import BillLineInput, PurchasePostingError, create_draft_bill, post_bill
 
@@ -65,6 +66,48 @@ def list_vendors(
 ):
     _get_authorized_business(business_id, db, current_user)
     return db.query(Vendor).filter(Vendor.business_id == business_id).order_by(Vendor.name).all()
+
+
+def _get_vendor_or_404(business_id: str, vendor_id: str, db: Session) -> Vendor:
+    vendor = (
+        db.query(Vendor)
+        .filter(Vendor.id == vendor_id, Vendor.business_id == business_id)
+        .first()
+    )
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    return vendor
+
+
+@router.put("/vendors/{vendor_id}", response_model=VendorRead)
+def update_vendor(
+    business_id: str,
+    vendor_id: str,
+    payload: VendorUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    vendor = _get_vendor_or_404(business_id, vendor_id, db)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(vendor, field, value)
+    db.commit()
+    db.refresh(vendor)
+    return vendor
+
+
+@router.delete("/vendors/{vendor_id}", status_code=204)
+def delete_vendor(
+    business_id: str,
+    vendor_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    vendor = _get_vendor_or_404(business_id, vendor_id, db)
+    db.delete(vendor)
+    db.commit()
+    return None
 
 
 # ----------------------------------------------------------- purchase bills
