@@ -3,7 +3,8 @@
     <div class="col-lg-7">
       <h4>Sales Invoices</h4>
       <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
-      <table class="table table-sm table-hover bg-white">
+      <div class="table-scroll">
+        <table class="table table-sm table-hover bg-white">
         <thead>
           <tr>
             <th>No.</th>
@@ -42,7 +43,8 @@
             <td colspan="5" class="text-muted text-center py-3">No invoices yet.</td>
           </tr>
         </tbody>
-      </table>
+        </table>
+      </div>
       <PaginationBar
         v-if="invoices.length"
         v-model:page="page"

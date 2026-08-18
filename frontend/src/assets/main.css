@@ -241,6 +241,37 @@ a:hover {
   width: 1%;
 }
 
+/* Scrollable table body with a sticky header row. Wrap a <table> in
+   <div class="table-scroll">...</div> so the header stays pinned while
+   rows scroll underneath, and keep the PaginationBar OUTSIDE this
+   wrapper (as a sibling, right after it) so pagination never scrolls
+   out of view either -- it's pinned below the scrolling area instead. */
+.table-scroll {
+  max-height: 520px;
+  overflow-y: auto;
+  overflow-x: auto;
+  position: relative;
+}
+
+.table-scroll table {
+  margin-bottom: 0;
+}
+
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f6f7f9;
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.table-scroll tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  box-shadow: 0 -1px 0 var(--border);
+}
+
 /* Row actions as plain text links, manager.io-style, instead of icon buttons */
 .row-action-links {
   display: inline-flex;

@@ -16,7 +16,8 @@
     </p>
 
     <div class="card">
-      <table class="table table-hover mb-0">
+      <div class="table-scroll">
+        <table class="table table-hover mb-0">
         <thead>
           <tr>
             <th class="ps-3">Code</th>
@@ -57,7 +58,8 @@
             </td>
           </tr>
         </tbody>
-      </table>
+        </table>
+      </div>
 
       <PaginationBar
         v-if="rules.length"
