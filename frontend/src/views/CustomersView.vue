@@ -22,7 +22,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in items" :key="c.id">
+          <tr v-for="c in pagedItems" :key="c.id">
             <td class="ps-3 fw-medium">{{ c.name }}</td>
             <td class="figure text-muted">{{ c.tin || "—" }}</td>
             <td class="text-muted">{{ c.email || "—" }}</td>
@@ -36,6 +36,13 @@
           </tr>
         </tbody>
       </table>
+
+      <PaginationBar
+        v-if="items.length"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total-items="totalItems"
+      />
 
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-people"></i>
@@ -69,9 +76,12 @@
 import { ref } from "vue";
 import EntityFormModal from "../components/EntityFormModal.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import PaginationBar from "../components/PaginationBar.vue";
 import { useCrudResource } from "../composables/useCrudResource";
+import { usePagination } from "../composables/usePagination";
 
 const { items, loading, create, update, remove } = useCrudResource("/customers");
+const { page, pageSize, pagedItems, totalItems } = usePagination(items);
 
 const fields = [
   { key: "name", label: "Name", required: true, colClass: "col-md-8" },

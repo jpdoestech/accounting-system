@@ -45,6 +45,74 @@ def test_vendor_update_and_delete(client):
     assert listing_after_delete == []
 
 
+def test_purchase_bill_draft_edit_locks_after_posting(client):
+    headers = _register_and_login(client, email="draft-bill@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Draft Bill Co"}
+    ).json()["id"]
+    ap = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "2000", "name": "AP", "account_type": "Liability"},
+    ).json()
+    expense = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "6000", "name": "Expense", "account_type": "Expense"},
+    ).json()
+    client.patch(f"/api/v1/businesses/{business_id}/settings", headers=headers, json={"ap_account_id": ap["id"]})
+    vendor = client.post(f"/api/v1/businesses/{business_id}/vendors", headers=headers, json={"name": "Supplier"}).json()
+    fy = client.post(
+        f"/api/v1/businesses/{business_id}/fiscal-years",
+        headers=headers,
+        json={"name": "FY2026", "start_date": "2026-01-01", "end_date": "2026-12-31"},
+    ).json()
+    client.post(
+        f"/api/v1/businesses/{business_id}/periods",
+        headers=headers,
+        json={"fiscal_year_id": fy["id"], "name": "Aug", "start_date": "2026-08-01", "end_date": "2026-08-31"},
+    )
+
+    bill = client.post(
+        f"/api/v1/businesses/{business_id}/purchase-bills",
+        headers=headers,
+        json={
+            "vendor_id": vendor["id"],
+            "bill_number": "BILL-1",
+            "bill_date": "2026-08-17",
+            "lines": [{"expense_account_id": expense["id"], "description": "x", "quantity": "1", "unit_price": "100"}],
+        },
+    ).json()
+
+    edited = client.put(
+        f"/api/v1/businesses/{business_id}/purchase-bills/{bill['id']}",
+        headers=headers,
+        json={
+            "vendor_id": vendor["id"],
+            "bill_number": "BILL-1-EDITED",
+            "bill_date": "2026-08-17",
+            "lines": [{"expense_account_id": expense["id"], "description": "y", "quantity": "2", "unit_price": "40"}],
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.json()["bill_number"] == "BILL-1-EDITED"
+
+    client.post(f"/api/v1/businesses/{business_id}/purchase-bills/{bill['id']}/post", headers=headers)
+
+    blocked = client.put(
+        f"/api/v1/businesses/{business_id}/purchase-bills/{bill['id']}",
+        headers=headers,
+        json={
+            "vendor_id": vendor["id"],
+            "bill_number": "SHOULD-NOT-APPLY",
+            "bill_date": "2026-08-17",
+            "lines": [{"expense_account_id": expense["id"], "description": "z", "quantity": "1", "unit_price": "1"}],
+        },
+    )
+    assert blocked.status_code == 400
+    assert client.delete(f"/api/v1/businesses/{business_id}/purchase-bills/{bill['id']}", headers=headers).status_code == 400
+
+
 def test_full_purchases_acceptance_flow(client):
     headers = _register_and_login(client)
 

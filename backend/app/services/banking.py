@@ -90,6 +90,57 @@ def create_draft_receipt(
     return receipt
 
 
+def update_draft_receipt(
+    db: Session,
+    *,
+    receipt: CashReceipt,
+    bank_account_id: str,
+    customer_id: str,
+    receipt_number: str,
+    receipt_date: date,
+    amount: Decimal,
+    allocations: list[AllocationInput],
+    memo: str | None = None,
+) -> CashReceipt:
+    """Replaces a Draft receipt's fields and allocations. Draft-only, same as update_draft_invoice."""
+    amount = to_money(amount)
+    allocated_total = zero()
+    for alloc in allocations:
+        invoice = db.get(SalesInvoice, alloc.document_id)
+        if not invoice or invoice.business_id != receipt.business_id:
+            raise BankingPostingError(f"Sales invoice {alloc.document_id} not found for this business.")
+        allocated_total += to_money(alloc.amount_applied)
+
+    if allocated_total > amount:
+        raise BankingPostingError(
+            f"Allocated total {allocated_total} exceeds the receipt amount {amount}."
+        )
+
+    receipt.bank_account_id = bank_account_id
+    receipt.customer_id = customer_id
+    receipt.receipt_number = receipt_number
+    receipt.receipt_date = receipt_date
+    receipt.amount = amount
+    receipt.memo = memo
+
+    for old_alloc in list(receipt.allocations):
+        db.delete(old_alloc)
+    db.flush()
+
+    for alloc in allocations:
+        db.add(
+            CashReceiptAllocation(
+                receipt_id=receipt.id,
+                sales_invoice_id=alloc.document_id,
+                amount_applied=to_money(alloc.amount_applied),
+            )
+        )
+
+    db.commit()
+    db.refresh(receipt)
+    return receipt
+
+
 def post_receipt(db: Session, *, receipt: CashReceipt, created_by_user_id: str | None = None) -> CashReceipt:
     if receipt.status != "Draft":
         raise BankingPostingError(f"Receipt is {receipt.status}; only a Draft receipt can be posted.")
@@ -167,6 +218,57 @@ def create_draft_disbursement(
         status="Draft",
     )
     db.add(disbursement)
+    db.flush()
+
+    for alloc in allocations:
+        db.add(
+            CashDisbursementAllocation(
+                disbursement_id=disbursement.id,
+                purchase_bill_id=alloc.document_id,
+                amount_applied=to_money(alloc.amount_applied),
+            )
+        )
+
+    db.commit()
+    db.refresh(disbursement)
+    return disbursement
+
+
+def update_draft_disbursement(
+    db: Session,
+    *,
+    disbursement: CashDisbursement,
+    bank_account_id: str,
+    vendor_id: str,
+    payment_number: str,
+    payment_date: date,
+    amount: Decimal,
+    allocations: list[AllocationInput],
+    memo: str | None = None,
+) -> CashDisbursement:
+    """Replaces a Draft disbursement's fields and allocations. Draft-only, same as update_draft_invoice."""
+    amount = to_money(amount)
+    allocated_total = zero()
+    for alloc in allocations:
+        bill = db.get(PurchaseBill, alloc.document_id)
+        if not bill or bill.business_id != disbursement.business_id:
+            raise BankingPostingError(f"Purchase bill {alloc.document_id} not found for this business.")
+        allocated_total += to_money(alloc.amount_applied)
+
+    if allocated_total > amount:
+        raise BankingPostingError(
+            f"Allocated total {allocated_total} exceeds the payment amount {amount}."
+        )
+
+    disbursement.bank_account_id = bank_account_id
+    disbursement.vendor_id = vendor_id
+    disbursement.payment_number = payment_number
+    disbursement.payment_date = payment_date
+    disbursement.amount = amount
+    disbursement.memo = memo
+
+    for old_alloc in list(disbursement.allocations):
+        db.delete(old_alloc)
     db.flush()
 
     for alloc in allocations:

@@ -18,6 +18,7 @@ class InventoryItemUpdate(BaseModel):
     unit_of_measure: str | None = None
     inventory_account_id: str | None = None
     cogs_account_id: str | None = None
+    is_active: bool | None = None
 
 
 class InventoryItemRead(BaseModel):

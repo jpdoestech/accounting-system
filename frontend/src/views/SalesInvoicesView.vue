@@ -10,11 +10,11 @@
             <th>Date</th>
             <th>Total</th>
             <th>Status</th>
-            <th></th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="inv in invoices" :key="inv.id">
+          <tr v-for="inv in pagedItems" :key="inv.id">
             <td>{{ inv.invoice_number }}</td>
             <td class="text-muted small">{{ inv.invoice_date }}</td>
             <td class="text-end">{{ inv.grand_total }}</td>
@@ -24,15 +24,18 @@
               </span>
             </td>
             <td class="text-end">
-              <button
-                v-if="inv.status === 'Draft'"
-                class="btn btn-sm btn-outline-primary"
-                :disabled="postingId === inv.id"
-                @click="onPost(inv.id)"
-              >
-                <span v-if="postingId === inv.id" class="spinner-border spinner-border-sm me-1"></span>
-                Post
-              </button>
+              <span v-if="inv.status === 'Draft'" class="row-action-links justify-content-end">
+                <button class="row-action-link" @click="openEdit(inv.id)">Edit</button>
+                <button class="row-action-link row-action-link--danger" @click="askDelete(inv)">Delete</button>
+                <button
+                  class="btn btn-sm btn-outline-primary ms-1"
+                  :disabled="postingId === inv.id"
+                  @click="onPost(inv.id)"
+                >
+                  <span v-if="postingId === inv.id" class="spinner-border spinner-border-sm me-1"></span>
+                  Post
+                </button>
+              </span>
             </td>
           </tr>
           <tr v-if="!invoices.length">
@@ -40,11 +43,20 @@
           </tr>
         </tbody>
       </table>
+      <PaginationBar
+        v-if="invoices.length"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total-items="totalItems"
+      />
     </div>
 
     <div class="col-lg-5">
-      <h4>New Invoice</h4>
-      <form @submit.prevent="onCreate" class="card p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <h4>{{ editingId ? "Edit Invoice" : "New Invoice" }}</h4>
+        <button v-if="editingId" type="button" class="btn btn-sm btn-link" @click="resetForm">Cancel edit</button>
+      </div>
+      <form @submit.prevent="onSubmit" class="card p-3">
         <div class="mb-2">
           <label class="form-label">Customer</label>
           <select v-model="form.customer_id" class="form-select" required>
@@ -81,11 +93,22 @@
             <div class="col-4">
               <input v-model="line.unit_price" type="number" step="0.01" class="form-control form-control-sm" placeholder="Unit price" required />
             </div>
-            <div class="col-4">
+            <div class="col-3">
               <select v-model="line.tax_rule_code" class="form-select form-select-sm">
                 <option value="">No tax</option>
                 <option v-for="r in taxRules" :key="r.rule_code" :value="r.rule_code">{{ r.rule_code }}</option>
               </select>
+            </div>
+            <div class="col-1">
+              <button
+                v-if="lines.length > 1"
+                type="button"
+                class="btn btn-sm btn-outline-danger w-100"
+                title="Remove line"
+                @click="lines.splice(i, 1)"
+              >
+                <i class="bi bi-x"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -96,10 +119,19 @@
         <div v-if="error" class="alert alert-danger py-2 small">{{ error }}</div>
         <button type="submit" class="btn btn-primary" :disabled="submitting">
           <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
-          Create Draft
+          {{ editingId ? "Save changes" : "Create Draft" }}
         </button>
       </form>
     </div>
+
+    <ConfirmDialog
+      :show="!!pendingDelete"
+      title="Delete invoice"
+      :message="pendingDelete ? `Delete draft invoice ${pendingDelete.invoice_number}? This can't be undone.` : ''"
+      :busy="deleting"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    />
   </div>
 </template>
 
@@ -107,9 +139,13 @@
 import { onMounted, reactive, ref } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
+import PaginationBar from "../components/PaginationBar.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { usePagination } from "../composables/usePagination";
 
 const businessStore = useBusinessStore();
 const invoices = ref([]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(invoices);
 const customers = ref([]);
 const accounts = ref([]);
 const taxRules = ref([]);
@@ -118,17 +154,35 @@ const error = ref("");
 const submitting = ref(false);
 const postError = ref("");
 const postingId = ref(null);
+const editingId = ref(null);
 
-const form = reactive({
-  customer_id: "",
-  invoice_number: "",
-  invoice_date: new Date().toISOString().slice(0, 10),
-});
+const pendingDelete = ref(null);
+const deleting = ref(false);
 
-const lines = ref([{ description: "", revenue_account_id: "", quantity: "1", unit_price: "", tax_rule_code: "", item_id: "" }]);
+function blankForm() {
+  return {
+    customer_id: "",
+    invoice_number: "",
+    invoice_date: new Date().toISOString().slice(0, 10),
+  };
+}
+
+function blankLine() {
+  return { description: "", revenue_account_id: "", quantity: "1", unit_price: "", tax_rule_code: "", item_id: "" };
+}
+
+const form = reactive(blankForm());
+const lines = ref([blankLine()]);
 
 function addLine() {
-  lines.value.push({ description: "", revenue_account_id: "", quantity: "1", unit_price: "", tax_rule_code: "", item_id: "" });
+  lines.value.push(blankLine());
+}
+
+function resetForm() {
+  editingId.value = null;
+  error.value = "";
+  Object.assign(form, blankForm());
+  lines.value = [blankLine()];
 }
 
 async function loadAll() {
@@ -148,21 +202,49 @@ async function loadAll() {
   items.value = itemsRes.data;
 }
 
-async function onCreate() {
+async function openEdit(invoiceId) {
+  error.value = "";
+  const { data: invoice } = await api.get(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${invoiceId}`);
+  editingId.value = invoice.id;
+  form.customer_id = invoice.customer_id;
+  form.invoice_number = invoice.invoice_number;
+  form.invoice_date = invoice.invoice_date;
+  lines.value = invoice.lines.length
+    ? invoice.lines.map((l) => ({
+        description: l.description,
+        revenue_account_id: l.revenue_account_id,
+        quantity: String(l.quantity),
+        unit_price: String(l.unit_price),
+        tax_rule_code: l.tax_rule_code || "",
+        item_id: l.item_id || "",
+      }))
+    : [blankLine()];
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function buildPayload() {
+  return {
+    ...form,
+    lines: lines.value
+      .filter((l) => l.revenue_account_id && l.unit_price)
+      .map((l) => ({ ...l, tax_rule_code: l.tax_rule_code || null, item_id: l.item_id || null })),
+  };
+}
+
+async function onSubmit() {
   error.value = "";
   submitting.value = true;
   try {
-    await api.post(`/businesses/${businessStore.activeBusinessId}/sales-invoices`, {
-      ...form,
-      lines: lines.value
-        .filter((l) => l.revenue_account_id && l.unit_price)
-        .map((l) => ({ ...l, tax_rule_code: l.tax_rule_code || null, item_id: l.item_id || null })),
-    });
-    lines.value = [{ description: "", revenue_account_id: "", quantity: "1", unit_price: "", tax_rule_code: "", item_id: "" }];
-    form.invoice_number = "";
+    const businessId = businessStore.activeBusinessId;
+    if (editingId.value) {
+      await api.put(`/businesses/${businessId}/sales-invoices/${editingId.value}`, buildPayload());
+    } else {
+      await api.post(`/businesses/${businessId}/sales-invoices`, buildPayload());
+    }
+    resetForm();
     await loadAll();
   } catch (err) {
-    error.value = err.response?.data?.detail || "Could not create invoice.";
+    error.value = err.response?.data?.detail || "Could not save invoice.";
   } finally {
     submitting.value = false;
   }
@@ -178,6 +260,23 @@ async function onPost(invoiceId) {
     postError.value = err.response?.data?.detail || "Could not post invoice.";
   } finally {
     postingId.value = null;
+  }
+}
+
+function askDelete(invoice) {
+  pendingDelete.value = invoice;
+}
+
+async function confirmDelete() {
+  if (!pendingDelete.value) return;
+  deleting.value = true;
+  try {
+    await api.delete(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${pendingDelete.value.id}`);
+    if (editingId.value === pendingDelete.value.id) resetForm();
+    pendingDelete.value = null;
+    await loadAll();
+  } finally {
+    deleting.value = false;
   }
 }
 

@@ -130,6 +130,85 @@ def create_draft_invoice(
     return invoice
 
 
+def update_draft_invoice(
+    db: Session,
+    *,
+    invoice: SalesInvoice,
+    customer_id: str,
+    invoice_number: str,
+    invoice_date: date,
+    due_date: date | None,
+    lines: list[InvoiceLineInput],
+    memo: str | None = None,
+    as_of_date_for_tax: date | None = None,
+) -> SalesInvoice:
+    """
+    Replaces a Draft invoice's header fields and line items in place,
+    recomputing totals exactly the way create_draft_invoice does.
+    Only ever called on a Draft (the API layer checks status first) --
+    a Posted invoice has already generated a journal entry, and
+    editing it after the fact would desync the ledger from what the
+    invoice claims to say, so posted invoices can't reach this path.
+    """
+    tax_date = as_of_date_for_tax or invoice_date
+
+    invoice.customer_id = customer_id
+    invoice.invoice_number = invoice_number
+    invoice.invoice_date = invoice_date
+    invoice.due_date = due_date
+    invoice.memo = memo
+
+    for old_line in list(invoice.lines):
+        db.delete(old_line)
+    db.flush()
+
+    subtotal = zero()
+    tax_total = zero()
+
+    for i, line in enumerate(lines, start=1):
+        line_amount = to_money(line.quantity * line.unit_price)
+        tax_amount = zero()
+
+        if line.tax_rule_code:
+            try:
+                calc = calculate_tax(
+                    db,
+                    business_id=invoice.business_id,
+                    rule_code=line.tax_rule_code,
+                    taxable_amount=line_amount,
+                    as_of_date=tax_date,
+                )
+                tax_amount = calc.tax_amount
+            except TaxRuleNotFoundError as exc:
+                raise SalesPostingError(str(exc))
+
+        db.add(
+            SalesInvoiceLine(
+                invoice_id=invoice.id,
+                revenue_account_id=line.revenue_account_id,
+                item_id=line.item_id,
+                line_number=i,
+                description=line.description,
+                quantity=line.quantity,
+                unit_price=line.unit_price,
+                tax_rule_code=line.tax_rule_code,
+                line_amount=line_amount,
+                tax_amount=tax_amount,
+            )
+        )
+
+        subtotal += line_amount
+        tax_total += tax_amount
+
+    invoice.subtotal = subtotal
+    invoice.tax_total = tax_total
+    invoice.grand_total = subtotal + tax_total
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
 def post_invoice(
     db: Session,
     *,

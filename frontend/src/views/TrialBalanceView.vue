@@ -13,7 +13,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in rows" :key="row.account_id">
+        <tr v-for="row in pagedItems" :key="row.account_id">
           <td class="text-muted">{{ row.account_code }}</td>
           <td>{{ row.account_name }}</td>
           <td class="text-end">{{ row.debit !== "0.00" ? row.debit : "" }}</td>
@@ -31,6 +31,12 @@
         </tr>
       </tfoot>
     </table>
+    <PaginationBar
+      v-if="rows.length"
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total-items="totalItems"
+    />
   </div>
 </template>
 
@@ -38,9 +44,12 @@
 import { computed, onMounted, ref, watch } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
+import PaginationBar from "../components/PaginationBar.vue";
+import { usePagination } from "../composables/usePagination";
 
 const businessStore = useBusinessStore();
 const rows = ref([]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(rows);
 
 const totalDebit = computed(() => rows.value.reduce((sum, r) => sum + Number(r.debit), 0));
 const totalCredit = computed(() => rows.value.reduce((sum, r) => sum + Number(r.credit), 0));

@@ -23,7 +23,13 @@ from app.schemas.sales import (
     SalesInvoiceCreate,
     SalesInvoiceRead,
 )
-from app.services.sales import InvoiceLineInput, SalesPostingError, create_draft_invoice, post_invoice
+from app.services.sales import (
+    InvoiceLineInput,
+    SalesPostingError,
+    create_draft_invoice,
+    post_invoice,
+    update_draft_invoice,
+)
 
 router = APIRouter(prefix="/businesses/{business_id}", tags=["sales"])
 
@@ -185,6 +191,72 @@ def get_sales_invoice(
     if not invoice or invoice.business_id != business_id:
         raise HTTPException(status_code=404, detail="Sales invoice not found.")
     return invoice
+
+
+@router.put("/sales-invoices/{invoice_id}", response_model=SalesInvoiceRead)
+def update_sales_invoice(
+    business_id: str,
+    invoice_id: str,
+    payload: SalesInvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    invoice = db.get(SalesInvoice, invoice_id)
+    if not invoice or invoice.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Sales invoice not found.")
+    if invoice.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft invoices can be edited. Void/reverse a posted invoice instead.")
+
+    customer = db.get(Customer, payload.customer_id)
+    if not customer or customer.business_id != business_id:
+        raise HTTPException(status_code=400, detail="Customer not found for this business.")
+
+    lines = [
+        InvoiceLineInput(
+            revenue_account_id=l.revenue_account_id,
+            description=l.description,
+            quantity=l.quantity,
+            unit_price=l.unit_price,
+            tax_rule_code=l.tax_rule_code,
+            item_id=l.item_id,
+        )
+        for l in payload.lines
+    ]
+
+    try:
+        invoice = update_draft_invoice(
+            db,
+            invoice=invoice,
+            customer_id=payload.customer_id,
+            invoice_number=payload.invoice_number,
+            invoice_date=payload.invoice_date,
+            due_date=payload.due_date,
+            lines=lines,
+            memo=payload.memo,
+        )
+    except SalesPostingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return invoice
+
+
+@router.delete("/sales-invoices/{invoice_id}", status_code=204)
+def delete_sales_invoice(
+    business_id: str,
+    invoice_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    invoice = db.get(SalesInvoice, invoice_id)
+    if not invoice or invoice.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Sales invoice not found.")
+    if invoice.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft invoices can be deleted. Posted invoices are permanent records.")
+    db.delete(invoice)
+    db.commit()
+    return None
 
 
 @router.post("/sales-invoices/{invoice_id}/post", response_model=SalesInvoiceRead)

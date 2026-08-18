@@ -1,79 +1,88 @@
 <template>
   <div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">Chart of Accounts</h4>
-      <button class="btn btn-primary btn-sm" @click="showForm = !showForm">
-        <i class="bi bi-plus-lg"></i> New Account
+    <div class="page-header">
+      <div>
+        <span class="eyebrow">Accounting · Master data</span>
+        <h4 class="mb-0">Chart of Accounts</h4>
+      </div>
+      <button class="btn btn-primary btn-sm" @click="openCreate">
+        <i class="bi bi-plus-lg"></i> New account
       </button>
     </div>
 
-    <form v-if="showForm" @submit.prevent="onCreate" class="card p-3 mb-4">
-      <div class="row g-2">
-        <div class="col-md-2">
-          <label class="form-label">Code</label>
-          <input v-model="form.code" class="form-control" required />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Name</label>
-          <input v-model="form.name" class="form-control" required />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Type</label>
-          <select v-model="form.account_type" class="form-select" required>
-            <option value="">— Select —</option>
-            <option v-for="t in accountTypes" :key="t">{{ t }}</option>
-          </select>
-        </div>
-        <div class="col-md-3 d-flex align-items-end">
-          <button type="submit" class="btn btn-success w-100" :disabled="submitting">
-            Add Account
-          </button>
-        </div>
-      </div>
-      <div v-if="error" class="alert alert-danger py-2 small mt-2 mb-0">{{ error }}</div>
-    </form>
+    <div class="card">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Code</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th class="table-actions pe-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="a in pagedItems" :key="a.id">
+            <td class="ps-3 figure text-muted">{{ a.code }}</td>
+            <td class="fw-medium">{{ a.name }}</td>
+            <td><span class="badge-pill badge-pill--muted">{{ a.account_type }}</span></td>
+            <td>
+              <span class="badge-pill" :class="a.is_active === false ? 'badge-pill--muted' : 'badge-pill--green'">
+                {{ a.is_active === false ? "Inactive" : "Active" }}
+              </span>
+            </td>
+            <td class="table-actions pe-3">
+              <span class="row-action-links">
+                <router-link
+                  :to="{ name: 'account-ledger', params: { businessId: businessStore.activeBusinessId, accountId: a.id } }"
+                  class="row-action-link"
+                >
+                  View ledger
+                </router-link>
+                <button class="row-action-link" @click="openEdit(a)">Edit</button>
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-    <table class="table table-sm table-hover bg-white">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="a in accounts" :key="a.id">
-          <td class="text-muted">{{ a.code }}</td>
-          <td>{{ a.name }}</td>
-          <td><span class="badge text-bg-light">{{ a.account_type }}</span></td>
-          <td class="text-end">
-            <router-link
-              :to="{ name: 'account-ledger', params: { businessId: businessStore.activeBusinessId, accountId: a.id } }"
-              class="small"
-            >
-              View ledger
-            </router-link>
-          </td>
-        </tr>
-        <tr v-if="!accounts.length">
-          <td colspan="4" class="text-muted text-center py-3">No accounts yet.</td>
-        </tr>
-      </tbody>
-    </table>
+      <PaginationBar
+        v-if="items.length"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total-items="totalItems"
+      />
+
+      <div v-if="!loading && !items.length" class="empty-state">
+        <i class="bi bi-diagram-3"></i>
+        No accounts yet. Add your first one to start recording transactions.
+      </div>
+    </div>
+
+    <EntityFormModal
+      v-model:show="showForm"
+      :title="editingId ? 'Edit account' : 'New account'"
+      :fields="fields"
+      :initial-values="formInitialValues"
+      :submitting="submitting"
+      :error="formError"
+      :submit-label="editingId ? 'Save changes' : 'Add account'"
+      @submit="onSubmit"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from "vue";
-import api from "../services/api";
+import { ref } from "vue";
 import { useBusinessStore } from "../stores/business";
+import EntityFormModal from "../components/EntityFormModal.vue";
+import PaginationBar from "../components/PaginationBar.vue";
+import { useCrudResource } from "../composables/useCrudResource";
+import { usePagination } from "../composables/usePagination";
 
 const businessStore = useBusinessStore();
-const accounts = ref([]);
-const showForm = ref(false);
-const submitting = ref(false);
-const error = ref("");
+const { items, loading, create, update } = useCrudResource("/accounts");
+const { page, pageSize, pagedItems, totalItems } = usePagination(items);
 
 const accountTypes = [
   "Asset",
@@ -86,31 +95,79 @@ const accountTypes = [
   "Other Expense",
 ];
 
-const form = reactive({ code: "", name: "", account_type: "" });
+const createFields = [
+  { key: "code", label: "Code", required: true, colClass: "col-md-3" },
+  { key: "name", label: "Name", required: true, colClass: "col-md-9" },
+  {
+    key: "account_type",
+    label: "Type",
+    type: "select",
+    required: true,
+    colClass: "col-12",
+    options: accountTypes.map((t) => ({ value: t, label: t })),
+  },
+  { key: "description", label: "Description", colClass: "col-12" },
+];
 
-async function loadAccounts() {
-  if (!businessStore.activeBusinessId) return;
-  const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/accounts`);
-  accounts.value = data;
+const editFields = [
+  { key: "code", label: "Code", required: true, colClass: "col-md-3" },
+  { key: "name", label: "Name", required: true, colClass: "col-md-9" },
+  {
+    key: "account_type",
+    label: "Type",
+    type: "select",
+    required: true,
+    colClass: "col-12",
+    options: accountTypes.map((t) => ({ value: t, label: t })),
+    hint: "Changing this reclassifies the account on financial statements going forward. Past reports already run are unaffected.",
+  },
+  { key: "description", label: "Description", colClass: "col-12" },
+  {
+    key: "is_active",
+    type: "checkbox",
+    label: "",
+    checkLabel: "Active (uncheck to retire this account)",
+    colClass: "col-12",
+  },
+];
+
+const fields = ref(createFields);
+const showForm = ref(false);
+const editingId = ref(null);
+const submitting = ref(false);
+const formError = ref("");
+const formInitialValues = ref({});
+
+function openCreate() {
+  editingId.value = null;
+  fields.value = createFields;
+  formInitialValues.value = { account_type: "" };
+  formError.value = "";
+  showForm.value = true;
 }
 
-async function onCreate() {
-  error.value = "";
+function openEdit(account) {
+  editingId.value = account.id;
+  fields.value = editFields;
+  formInitialValues.value = { ...account, is_active: account.is_active !== false };
+  formError.value = "";
+  showForm.value = true;
+}
+
+async function onSubmit(values) {
+  formError.value = "";
   submitting.value = true;
   try {
-    await api.post(`/businesses/${businessStore.activeBusinessId}/accounts`, form);
-    form.code = "";
-    form.name = "";
-    form.account_type = "";
+    if (editingId.value) {
+      await update(editingId.value, values);
+    } else {
+      await create(values);
+    }
     showForm.value = false;
-    await loadAccounts();
   } catch (err) {
-    error.value = err.response?.data?.detail || "Could not create account.";
+    formError.value = err.response?.data?.detail || "Could not save account.";
   } finally {
     submitting.value = false;
   }
 }
-
-onMounted(loadAccounts);
-watch(() => businessStore.activeBusinessId, loadAccounts);
 </script>

@@ -32,6 +32,8 @@ from app.services.banking import (
     create_draft_receipt,
     post_disbursement,
     post_receipt,
+    update_draft_disbursement,
+    update_draft_receipt,
 )
 from app.services.reconciliation import ReconciliationError, reconcile_bank_account
 
@@ -150,6 +152,73 @@ def list_cash_receipts(
     )
 
 
+@router.get("/cash-receipts/{receipt_id}", response_model=CashReceiptRead)
+def get_cash_receipt(
+    business_id: str,
+    receipt_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    receipt = db.get(CashReceipt, receipt_id)
+    if not receipt or receipt.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Cash receipt not found.")
+    return receipt
+
+
+@router.put("/cash-receipts/{receipt_id}", response_model=CashReceiptRead)
+def update_cash_receipt(
+    business_id: str,
+    receipt_id: str,
+    payload: CashReceiptCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    receipt = db.get(CashReceipt, receipt_id)
+    if not receipt or receipt.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Cash receipt not found.")
+    if receipt.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft receipts can be edited. Void/reverse a posted receipt instead.")
+
+    allocations = [AllocationInput(document_id=a.document_id, amount_applied=a.amount_applied) for a in payload.allocations]
+
+    try:
+        receipt = update_draft_receipt(
+            db,
+            receipt=receipt,
+            bank_account_id=payload.bank_account_id,
+            customer_id=payload.customer_id,
+            receipt_number=payload.receipt_number,
+            receipt_date=payload.receipt_date,
+            amount=payload.amount,
+            allocations=allocations,
+            memo=payload.memo,
+        )
+    except BankingPostingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return receipt
+
+
+@router.delete("/cash-receipts/{receipt_id}", status_code=204)
+def delete_cash_receipt(
+    business_id: str,
+    receipt_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    receipt = db.get(CashReceipt, receipt_id)
+    if not receipt or receipt.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Cash receipt not found.")
+    if receipt.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft receipts can be deleted. Posted receipts are permanent records.")
+    db.delete(receipt)
+    db.commit()
+    return None
+
+
 @router.post("/cash-receipts/{receipt_id}/post", response_model=CashReceiptRead)
 def post_cash_receipt(
     business_id: str,
@@ -213,6 +282,73 @@ def list_cash_disbursements(
         .order_by(CashDisbursement.payment_date.desc())
         .all()
     )
+
+
+@router.get("/cash-disbursements/{disbursement_id}", response_model=CashDisbursementRead)
+def get_cash_disbursement(
+    business_id: str,
+    disbursement_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    disbursement = db.get(CashDisbursement, disbursement_id)
+    if not disbursement or disbursement.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Cash disbursement not found.")
+    return disbursement
+
+
+@router.put("/cash-disbursements/{disbursement_id}", response_model=CashDisbursementRead)
+def update_cash_disbursement(
+    business_id: str,
+    disbursement_id: str,
+    payload: CashDisbursementCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    disbursement = db.get(CashDisbursement, disbursement_id)
+    if not disbursement or disbursement.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Cash disbursement not found.")
+    if disbursement.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft payments can be edited. Void/reverse a posted payment instead.")
+
+    allocations = [AllocationInput(document_id=a.document_id, amount_applied=a.amount_applied) for a in payload.allocations]
+
+    try:
+        disbursement = update_draft_disbursement(
+            db,
+            disbursement=disbursement,
+            bank_account_id=payload.bank_account_id,
+            vendor_id=payload.vendor_id,
+            payment_number=payload.payment_number,
+            payment_date=payload.payment_date,
+            amount=payload.amount,
+            allocations=allocations,
+            memo=payload.memo,
+        )
+    except BankingPostingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return disbursement
+
+
+@router.delete("/cash-disbursements/{disbursement_id}", status_code=204)
+def delete_cash_disbursement(
+    business_id: str,
+    disbursement_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    disbursement = db.get(CashDisbursement, disbursement_id)
+    if not disbursement or disbursement.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Cash disbursement not found.")
+    if disbursement.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft payments can be deleted. Posted payments are permanent records.")
+    db.delete(disbursement)
+    db.commit()
+    return None
 
 
 @router.post("/cash-disbursements/{disbursement_id}/post", response_model=CashDisbursementRead)

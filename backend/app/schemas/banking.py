@@ -19,6 +19,7 @@ class BankAccountUpdate(BaseModel):
     bank_name: str | None = None
     account_number: str | None = None
     currency_code: str | None = None
+    is_active: bool | None = None
 
 
 class BankAccountRead(BaseModel):

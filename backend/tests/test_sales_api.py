@@ -51,6 +51,96 @@ def test_customer_update_and_delete(client):
     assert listing_after_delete == []
 
 
+def test_sales_invoice_draft_edit_and_delete(client):
+    headers = _register_and_login(client, email="draft-invoice@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Draft Invoice Co"}
+    ).json()["id"]
+    ar = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "1200", "name": "AR", "account_type": "Asset"},
+    ).json()
+    rev = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "4000", "name": "Revenue", "account_type": "Revenue"},
+    ).json()
+    client.patch(f"/api/v1/businesses/{business_id}/settings", headers=headers, json={"ar_account_id": ar["id"]})
+    customer = client.post(
+        f"/api/v1/businesses/{business_id}/customers", headers=headers, json={"name": "Acme"}
+    ).json()
+    fy = client.post(
+        f"/api/v1/businesses/{business_id}/fiscal-years",
+        headers=headers,
+        json={"name": "FY2026", "start_date": "2026-01-01", "end_date": "2026-12-31"},
+    ).json()
+    client.post(
+        f"/api/v1/businesses/{business_id}/periods",
+        headers=headers,
+        json={"fiscal_year_id": fy["id"], "name": "Aug", "start_date": "2026-08-01", "end_date": "2026-08-31"},
+    )
+
+    invoice = client.post(
+        f"/api/v1/businesses/{business_id}/sales-invoices",
+        headers=headers,
+        json={
+            "customer_id": customer["id"],
+            "invoice_number": "INV-1",
+            "invoice_date": "2026-08-17",
+            "lines": [{"revenue_account_id": rev["id"], "description": "x", "quantity": "1", "unit_price": "100"}],
+        },
+    ).json()
+
+    # A draft invoice can be edited -- header and lines both change, totals recompute.
+    edited = client.put(
+        f"/api/v1/businesses/{business_id}/sales-invoices/{invoice['id']}",
+        headers=headers,
+        json={
+            "customer_id": customer["id"],
+            "invoice_number": "INV-1-EDITED",
+            "invoice_date": "2026-08-17",
+            "lines": [{"revenue_account_id": rev["id"], "description": "y", "quantity": "3", "unit_price": "50"}],
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.json()["invoice_number"] == "INV-1-EDITED"
+    assert edited.json()["grand_total"] == "150.00"
+
+    posted = client.post(f"/api/v1/businesses/{business_id}/sales-invoices/{invoice['id']}/post", headers=headers)
+    assert posted.status_code == 200
+
+    # Once posted, both edit and delete are rejected.
+    blocked_edit = client.put(
+        f"/api/v1/businesses/{business_id}/sales-invoices/{invoice['id']}",
+        headers=headers,
+        json={
+            "customer_id": customer["id"],
+            "invoice_number": "SHOULD-NOT-APPLY",
+            "invoice_date": "2026-08-17",
+            "lines": [{"revenue_account_id": rev["id"], "description": "z", "quantity": "1", "unit_price": "1"}],
+        },
+    )
+    assert blocked_edit.status_code == 400
+
+    blocked_delete = client.delete(f"/api/v1/businesses/{business_id}/sales-invoices/{invoice['id']}", headers=headers)
+    assert blocked_delete.status_code == 400
+
+    # A second, still-draft invoice CAN be deleted.
+    second = client.post(
+        f"/api/v1/businesses/{business_id}/sales-invoices",
+        headers=headers,
+        json={
+            "customer_id": customer["id"],
+            "invoice_number": "INV-2",
+            "invoice_date": "2026-08-17",
+            "lines": [{"revenue_account_id": rev["id"], "description": "x", "quantity": "1", "unit_price": "10"}],
+        },
+    ).json()
+    deleted = client.delete(f"/api/v1/businesses/{business_id}/sales-invoices/{second['id']}", headers=headers)
+    assert deleted.status_code == 204
+
+
 def test_full_sales_acceptance_flow(client):
     headers = _register_and_login(client)
 

@@ -111,7 +111,16 @@ def update_account(
     )
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if "code" in updates and updates["code"] != account.code:
+        clash = (
+            db.query(Account)
+            .filter(Account.business_id == business_id, Account.code == updates["code"])
+            .first()
+        )
+        if clash:
+            raise HTTPException(status_code=400, detail=f"Account code '{updates['code']}' already exists.")
+    for field, value in updates.items():
         setattr(account, field, value)
     db.commit()
     db.refresh(account)

@@ -10,11 +10,11 @@
             <th>Date</th>
             <th>Due to Vendor</th>
             <th>Status</th>
-            <th></th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="bill in bills" :key="bill.id">
+          <tr v-for="bill in pagedItems" :key="bill.id">
             <td>{{ bill.bill_number }}</td>
             <td class="text-muted small">{{ bill.bill_date }}</td>
             <td class="text-end">{{ bill.amount_due_to_vendor }}</td>
@@ -24,15 +24,18 @@
               </span>
             </td>
             <td class="text-end">
-              <button
-                v-if="bill.status === 'Draft'"
-                class="btn btn-sm btn-outline-primary"
-                :disabled="postingId === bill.id"
-                @click="onPost(bill.id)"
-              >
-                <span v-if="postingId === bill.id" class="spinner-border spinner-border-sm me-1"></span>
-                Post
-              </button>
+              <span v-if="bill.status === 'Draft'" class="row-action-links justify-content-end">
+                <button class="row-action-link" @click="openEdit(bill.id)">Edit</button>
+                <button class="row-action-link row-action-link--danger" @click="askDelete(bill)">Delete</button>
+                <button
+                  class="btn btn-sm btn-outline-primary ms-1"
+                  :disabled="postingId === bill.id"
+                  @click="onPost(bill.id)"
+                >
+                  <span v-if="postingId === bill.id" class="spinner-border spinner-border-sm me-1"></span>
+                  Post
+                </button>
+              </span>
             </td>
           </tr>
           <tr v-if="!bills.length">
@@ -40,11 +43,20 @@
           </tr>
         </tbody>
       </table>
+      <PaginationBar
+        v-if="bills.length"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total-items="totalItems"
+      />
     </div>
 
     <div class="col-lg-5">
-      <h4>New Bill</h4>
-      <form @submit.prevent="onCreate" class="card p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <h4>{{ editingId ? "Edit Bill" : "New Bill" }}</h4>
+        <button v-if="editingId" type="button" class="btn btn-sm btn-link" @click="resetForm">Cancel edit</button>
+      </div>
+      <form @submit.prevent="onSubmit" class="card p-3">
         <div class="mb-2">
           <label class="form-label">Vendor</label>
           <select v-model="form.vendor_id" class="form-select" required>
@@ -87,11 +99,22 @@
                 <option v-for="r in vatRules" :key="r.rule_code" :value="r.rule_code">{{ r.rule_code }}</option>
               </select>
             </div>
-            <div class="col-3">
+            <div class="col-2">
               <select v-model="line.withholding_tax_rule_code" class="form-select form-select-sm">
                 <option value="">No W/T</option>
                 <option v-for="r in withholdingRules" :key="r.rule_code" :value="r.rule_code">{{ r.rule_code }}</option>
               </select>
+            </div>
+            <div class="col-1">
+              <button
+                v-if="lines.length > 1"
+                type="button"
+                class="btn btn-sm btn-outline-danger w-100"
+                title="Remove line"
+                @click="lines.splice(i, 1)"
+              >
+                <i class="bi bi-x"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -102,20 +125,33 @@
         <div v-if="error" class="alert alert-danger py-2 small">{{ error }}</div>
         <button type="submit" class="btn btn-primary" :disabled="submitting">
           <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
-          Create Draft
+          {{ editingId ? "Save changes" : "Create Draft" }}
         </button>
       </form>
     </div>
+
+    <ConfirmDialog
+      :show="!!pendingDelete"
+      title="Delete bill"
+      :message="pendingDelete ? `Delete draft bill ${pendingDelete.bill_number}? This can't be undone.` : ''"
+      :busy="deleting"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import api from "../services/api";
+import PaginationBar from "../components/PaginationBar.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { usePagination } from "../composables/usePagination";
 import { useBusinessStore } from "../stores/business";
 
 const businessStore = useBusinessStore();
 const bills = ref([]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(bills);
 const vendors = ref([]);
 const accounts = ref([]);
 const taxRules = ref([]);
@@ -124,18 +160,24 @@ const error = ref("");
 const submitting = ref(false);
 const postError = ref("");
 const postingId = ref(null);
+const editingId = ref(null);
+
+const pendingDelete = ref(null);
+const deleting = ref(false);
 
 const vatRules = computed(() => taxRules.value.filter((r) => r.tax_type === "VAT"));
 const withholdingRules = computed(() => taxRules.value.filter((r) => r.tax_type === "Withholding"));
 
-const form = reactive({
-  vendor_id: "",
-  bill_number: "",
-  bill_date: new Date().toISOString().slice(0, 10),
-});
+function blankForm() {
+  return {
+    vendor_id: "",
+    bill_number: "",
+    bill_date: new Date().toISOString().slice(0, 10),
+  };
+}
 
-const lines = ref([
-  {
+function blankLine() {
+  return {
     description: "",
     expense_account_id: "",
     quantity: "1",
@@ -143,19 +185,21 @@ const lines = ref([
     tax_rule_code: "",
     withholding_tax_rule_code: "",
     item_id: "",
-  },
-]);
+  };
+}
+
+const form = reactive(blankForm());
+const lines = ref([blankLine()]);
 
 function addLine() {
-  lines.value.push({
-    description: "",
-    expense_account_id: "",
-    quantity: "1",
-    unit_price: "",
-    tax_rule_code: "",
-    withholding_tax_rule_code: "",
-    item_id: "",
-  });
+  lines.value.push(blankLine());
+}
+
+function resetForm() {
+  editingId.value = null;
+  error.value = "";
+  Object.assign(form, blankForm());
+  lines.value = [blankLine()];
 }
 
 async function loadAll() {
@@ -175,36 +219,55 @@ async function loadAll() {
   items.value = itemsRes.data;
 }
 
-async function onCreate() {
+async function openEdit(billId) {
+  error.value = "";
+  const { data: bill } = await api.get(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${billId}`);
+  editingId.value = bill.id;
+  form.vendor_id = bill.vendor_id;
+  form.bill_number = bill.bill_number;
+  form.bill_date = bill.bill_date;
+  lines.value = bill.lines.length
+    ? bill.lines.map((l) => ({
+        description: l.description,
+        expense_account_id: l.expense_account_id,
+        quantity: String(l.quantity),
+        unit_price: String(l.unit_price),
+        tax_rule_code: l.tax_rule_code || "",
+        withholding_tax_rule_code: l.withholding_tax_rule_code || "",
+        item_id: l.item_id || "",
+      }))
+    : [blankLine()];
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function buildPayload() {
+  return {
+    ...form,
+    lines: lines.value
+      .filter((l) => l.expense_account_id && l.unit_price)
+      .map((l) => ({
+        ...l,
+        tax_rule_code: l.tax_rule_code || null,
+        withholding_tax_rule_code: l.withholding_tax_rule_code || null,
+        item_id: l.item_id || null,
+      })),
+  };
+}
+
+async function onSubmit() {
   error.value = "";
   submitting.value = true;
   try {
-    await api.post(`/businesses/${businessStore.activeBusinessId}/purchase-bills`, {
-      ...form,
-      lines: lines.value
-        .filter((l) => l.expense_account_id && l.unit_price)
-        .map((l) => ({
-          ...l,
-          tax_rule_code: l.tax_rule_code || null,
-          withholding_tax_rule_code: l.withholding_tax_rule_code || null,
-          item_id: l.item_id || null,
-        })),
-    });
-    lines.value = [
-      {
-        description: "",
-        expense_account_id: "",
-        quantity: "1",
-        unit_price: "",
-        tax_rule_code: "",
-        withholding_tax_rule_code: "",
-        item_id: "",
-      },
-    ];
-    form.bill_number = "";
+    const businessId = businessStore.activeBusinessId;
+    if (editingId.value) {
+      await api.put(`/businesses/${businessId}/purchase-bills/${editingId.value}`, buildPayload());
+    } else {
+      await api.post(`/businesses/${businessId}/purchase-bills`, buildPayload());
+    }
+    resetForm();
     await loadAll();
   } catch (err) {
-    error.value = err.response?.data?.detail || "Could not create bill.";
+    error.value = err.response?.data?.detail || "Could not save bill.";
   } finally {
     submitting.value = false;
   }
@@ -220,6 +283,23 @@ async function onPost(billId) {
     postError.value = err.response?.data?.detail || "Could not post bill.";
   } finally {
     postingId.value = null;
+  }
+}
+
+function askDelete(bill) {
+  pendingDelete.value = bill;
+}
+
+async function confirmDelete() {
+  if (!pendingDelete.value) return;
+  deleting.value = true;
+  try {
+    await api.delete(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${pendingDelete.value.id}`);
+    if (editingId.value === pendingDelete.value.id) resetForm();
+    pendingDelete.value = null;
+    await loadAll();
+  } finally {
+    deleting.value = false;
   }
 }
 

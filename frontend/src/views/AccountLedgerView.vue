@@ -16,7 +16,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(line, i) in ledger.lines" :key="i">
+        <tr v-for="(line, i) in pagedItems" :key="i">
           <td>{{ line.entry_date }}</td>
           <td class="text-muted small">{{ line.description || line.memo || line.reference || "—" }}</td>
           <td class="text-end">{{ line.debit !== "0.00" ? line.debit : "" }}</td>
@@ -28,17 +28,27 @@
         </tr>
       </tbody>
     </table>
+    <PaginationBar
+      v-if="ledger.lines.length"
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total-items="totalItems"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
+import PaginationBar from "../components/PaginationBar.vue";
+import { usePagination } from "../composables/usePagination";
 
 const props = defineProps({ businessId: String, accountId: String });
 const businessStore = useBusinessStore();
 const ledger = ref(null);
+const ledgerLines = computed(() => ledger.value?.lines || []);
+const { page, pageSize, pagedItems, totalItems } = usePagination(ledgerLines);
 
 async function loadLedger() {
   const bId = props.businessId || businessStore.activeBusinessId;

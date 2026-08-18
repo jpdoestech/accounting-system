@@ -24,17 +24,27 @@ class AccountCreate(BaseModel):
 
 class AccountUpdate(BaseModel):
     """
-    Deliberately narrower than AccountCreate: code and account_type are
-    excluded because journal lines and financial-statement grouping key
-    off them, so changing either after the account has postings would
-    silently reclassify historical transactions. Renaming, adding a
-    description, or toggling is_active never touches the ledger.
+    Full edit, including code and account_type. Changing either of
+    these after an account already has journal-line history will
+    reclassify that history on financial statements going forward
+    (past reports already generated are unaffected) -- the API layer
+    doesn't block this since it's an explicit, deliberate action, but
+    the frontend should make that consequence visible before saving.
     """
 
+    code: str | None = None
     name: str | None = None
+    account_type: str | None = None
     description: str | None = None
     default_tax_treatment: str | None = None
     is_active: bool | None = None
+
+    @field_validator("account_type")
+    @classmethod
+    def validate_account_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in ACCOUNT_TYPES:
+            raise ValueError(f"account_type must be one of {ACCOUNT_TYPES}")
+        return v
 
 
 class AccountRead(BaseModel):

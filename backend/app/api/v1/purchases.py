@@ -19,7 +19,13 @@ from app.schemas.purchases import (
     VendorRead,
     VendorUpdate,
 )
-from app.services.purchases import BillLineInput, PurchasePostingError, create_draft_bill, post_bill
+from app.services.purchases import (
+    BillLineInput,
+    PurchasePostingError,
+    create_draft_bill,
+    post_bill,
+    update_draft_bill,
+)
 
 router = APIRouter(prefix="/businesses/{business_id}", tags=["purchases"])
 
@@ -182,6 +188,73 @@ def get_purchase_bill(
     if not bill or bill.business_id != business_id:
         raise HTTPException(status_code=404, detail="Purchase bill not found.")
     return bill
+
+
+@router.put("/purchase-bills/{bill_id}", response_model=PurchaseBillRead)
+def update_purchase_bill(
+    business_id: str,
+    bill_id: str,
+    payload: PurchaseBillCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    bill = db.get(PurchaseBill, bill_id)
+    if not bill or bill.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Purchase bill not found.")
+    if bill.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft bills can be edited. Void/reverse a posted bill instead.")
+
+    vendor = db.get(Vendor, payload.vendor_id)
+    if not vendor or vendor.business_id != business_id:
+        raise HTTPException(status_code=400, detail="Vendor not found for this business.")
+
+    lines = [
+        BillLineInput(
+            expense_account_id=l.expense_account_id,
+            description=l.description,
+            quantity=l.quantity,
+            unit_price=l.unit_price,
+            tax_rule_code=l.tax_rule_code,
+            withholding_tax_rule_code=l.withholding_tax_rule_code,
+            item_id=l.item_id,
+        )
+        for l in payload.lines
+    ]
+
+    try:
+        bill = update_draft_bill(
+            db,
+            bill=bill,
+            vendor_id=payload.vendor_id,
+            bill_number=payload.bill_number,
+            bill_date=payload.bill_date,
+            due_date=payload.due_date,
+            lines=lines,
+            memo=payload.memo,
+        )
+    except PurchasePostingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return bill
+
+
+@router.delete("/purchase-bills/{bill_id}", status_code=204)
+def delete_purchase_bill(
+    business_id: str,
+    bill_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_authorized_business(business_id, db, current_user)
+    bill = db.get(PurchaseBill, bill_id)
+    if not bill or bill.business_id != business_id:
+        raise HTTPException(status_code=404, detail="Purchase bill not found.")
+    if bill.status != "Draft":
+        raise HTTPException(status_code=400, detail="Only draft bills can be deleted. Posted bills are permanent records.")
+    db.delete(bill)
+    db.commit()
+    return None
 
 
 @router.post("/purchase-bills/{bill_id}/post", response_model=PurchaseBillRead)

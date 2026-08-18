@@ -148,6 +148,103 @@ def create_draft_bill(
     return bill
 
 
+def update_draft_bill(
+    db: Session,
+    *,
+    bill: PurchaseBill,
+    vendor_id: str,
+    bill_number: str,
+    bill_date: date,
+    due_date: date | None,
+    lines: list[BillLineInput],
+    memo: str | None = None,
+    as_of_date_for_tax: date | None = None,
+) -> PurchaseBill:
+    """
+    Replaces a Draft bill's header fields and line items in place,
+    mirroring create_draft_bill. Only reachable on a Draft -- a Posted
+    bill already has a journal entry, so editing it would desync the
+    ledger from what the bill claims to say.
+    """
+    tax_date = as_of_date_for_tax or bill_date
+
+    bill.vendor_id = vendor_id
+    bill.bill_number = bill_number
+    bill.bill_date = bill_date
+    bill.due_date = due_date
+    bill.memo = memo
+
+    for old_line in list(bill.lines):
+        db.delete(old_line)
+    db.flush()
+
+    subtotal = zero()
+    input_vat_total = zero()
+    withholding_tax_total = zero()
+
+    for i, line in enumerate(lines, start=1):
+        line_amount = to_money(line.quantity * line.unit_price)
+        tax_amount = zero()
+        withholding_amount = zero()
+
+        if line.tax_rule_code:
+            try:
+                calc = calculate_tax(
+                    db,
+                    business_id=bill.business_id,
+                    rule_code=line.tax_rule_code,
+                    taxable_amount=line_amount,
+                    as_of_date=tax_date,
+                )
+                tax_amount = calc.tax_amount
+            except TaxRuleNotFoundError as exc:
+                raise PurchasePostingError(str(exc))
+
+        if line.withholding_tax_rule_code:
+            try:
+                calc = calculate_tax(
+                    db,
+                    business_id=bill.business_id,
+                    rule_code=line.withholding_tax_rule_code,
+                    taxable_amount=line_amount,
+                    as_of_date=tax_date,
+                )
+                withholding_amount = calc.tax_amount
+            except TaxRuleNotFoundError as exc:
+                raise PurchasePostingError(str(exc))
+
+        db.add(
+            PurchaseBillLine(
+                bill_id=bill.id,
+                expense_account_id=line.expense_account_id,
+                item_id=line.item_id,
+                line_number=i,
+                description=line.description,
+                quantity=line.quantity,
+                unit_price=line.unit_price,
+                tax_rule_code=line.tax_rule_code,
+                withholding_tax_rule_code=line.withholding_tax_rule_code,
+                line_amount=line_amount,
+                tax_amount=tax_amount,
+                withholding_tax_amount=withholding_amount,
+            )
+        )
+
+        subtotal += line_amount
+        input_vat_total += tax_amount
+        withholding_tax_total += withholding_amount
+
+    bill.subtotal = subtotal
+    bill.input_vat_total = input_vat_total
+    bill.withholding_tax_total = withholding_tax_total
+    bill.grand_total = subtotal + input_vat_total
+    bill.amount_due_to_vendor = bill.grand_total - withholding_tax_total
+
+    db.commit()
+    db.refresh(bill)
+    return bill
+
+
 def post_bill(
     db: Session,
     *,

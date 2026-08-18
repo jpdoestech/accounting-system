@@ -1,119 +1,171 @@
 <template>
   <div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">Inventory Items</h4>
-      <button class="btn btn-primary btn-sm" @click="showForm = !showForm">
-        <i class="bi bi-plus-lg"></i> New Item
+    <div class="page-header">
+      <div>
+        <span class="eyebrow">Inventory · Master data</span>
+        <h4 class="mb-0">Inventory Items</h4>
+      </div>
+      <button class="btn btn-primary btn-sm" @click="openCreate">
+        <i class="bi bi-plus-lg"></i> New item
       </button>
     </div>
 
-    <form v-if="showForm" @submit.prevent="onCreate" class="card p-3 mb-4">
-      <div class="row g-2">
-        <div class="col-md-2">
-          <label class="form-label">SKU</label>
-          <input v-model="form.sku" class="form-control" required />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Name</label>
-          <input v-model="form.name" class="form-control" required />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Unit</label>
-          <input v-model="form.unit_of_measure" class="form-control" placeholder="pcs" />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Inventory Account</label>
-          <select v-model="form.inventory_account_id" class="form-select" required>
-            <option value="">— account —</option>
-            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</option>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">COGS Account</label>
-          <select v-model="form.cogs_account_id" class="form-select" required>
-            <option value="">— account —</option>
-            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</option>
-          </select>
-        </div>
-      </div>
-      <div v-if="error" class="alert alert-danger py-2 small mt-2 mb-0">{{ error }}</div>
-      <button type="submit" class="btn btn-success mt-2" :disabled="submitting">Add Item</button>
-    </form>
+    <div class="card">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">SKU</th>
+            <th>Name</th>
+            <th class="text-end">Qty on Hand</th>
+            <th class="text-end">Avg. Cost</th>
+            <th class="text-end">Stock Value</th>
+            <th>Status</th>
+            <th class="table-actions pe-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in pagedItems" :key="item.id">
+            <td class="ps-3 figure text-muted">{{ item.sku }}</td>
+            <td class="fw-medium">{{ item.name }}</td>
+            <td class="text-end figure">{{ item.quantity_on_hand }}</td>
+            <td class="text-end figure">{{ item.average_cost }}</td>
+            <td class="text-end figure">
+              {{ (Number(item.quantity_on_hand) * Number(item.average_cost)).toFixed(2) }}
+            </td>
+            <td>
+              <span class="badge-pill" :class="item.is_active === false ? 'badge-pill--muted' : 'badge-pill--green'">
+                {{ item.is_active === false ? "Inactive" : "Active" }}
+              </span>
+            </td>
+            <td class="table-actions pe-3">
+              <span class="row-action-links">
+                <button class="row-action-link" @click="openEdit(item)">Edit</button>
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-    <table class="table table-sm table-hover bg-white">
-      <thead>
-        <tr>
-          <th>SKU</th>
-          <th>Name</th>
-          <th class="text-end">Qty on Hand</th>
-          <th class="text-end">Avg. Cost</th>
-          <th class="text-end">Stock Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="item in items" :key="item.id">
-          <td class="text-muted">{{ item.sku }}</td>
-          <td>{{ item.name }}</td>
-          <td class="text-end">{{ item.quantity_on_hand }}</td>
-          <td class="text-end">{{ item.average_cost }}</td>
-          <td class="text-end">{{ (Number(item.quantity_on_hand) * Number(item.average_cost)).toFixed(2) }}</td>
-        </tr>
-        <tr v-if="!items.length">
-          <td colspan="5" class="text-muted text-center py-3">No inventory items yet.</td>
-        </tr>
-      </tbody>
-    </table>
+      <PaginationBar
+        v-if="items.length"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total-items="totalItems"
+      />
+
+      <div v-if="!loading && !items.length" class="empty-state">
+        <i class="bi bi-box-seam"></i>
+        No inventory items yet. Add one to track stock on sales and purchases.
+      </div>
+    </div>
+
+    <EntityFormModal
+      v-model:show="showForm"
+      :title="editingId ? 'Edit item' : 'New item'"
+      :fields="fields"
+      :initial-values="formInitialValues"
+      :submitting="submitting"
+      :error="formError"
+      :submit-label="editingId ? 'Save changes' : 'Add item'"
+      @submit="onSubmit"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from "vue";
+import { onMounted, ref } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
+import EntityFormModal from "../components/EntityFormModal.vue";
+import PaginationBar from "../components/PaginationBar.vue";
+import { useCrudResource } from "../composables/useCrudResource";
+import { usePagination } from "../composables/usePagination";
 
 const businessStore = useBusinessStore();
-const items = ref([]);
-const accounts = ref([]);
+const { items, loading, create, update } = useCrudResource("/inventory-items");
+const { page, pageSize, pagedItems, totalItems } = usePagination(items);
+
+const createFields = [
+  { key: "sku", label: "SKU", required: true, colClass: "col-md-4" },
+  { key: "name", label: "Name", required: true, colClass: "col-md-8" },
+  { key: "unit_of_measure", label: "Unit", placeholder: "pcs", colClass: "col-md-4" },
+  {
+    key: "inventory_account_id",
+    label: "Inventory account",
+    type: "select",
+    required: true,
+    colClass: "col-md-4",
+    options: [],
+  },
+  {
+    key: "cogs_account_id",
+    label: "COGS account",
+    type: "select",
+    required: true,
+    colClass: "col-md-4",
+    options: [],
+  },
+];
+
+const editFields = [
+  ...createFields,
+  {
+    key: "is_active",
+    type: "checkbox",
+    label: "",
+    checkLabel: "Active (uncheck to retire this item)",
+    colClass: "col-12",
+  },
+];
+
+const fields = ref(createFields);
+
 const showForm = ref(false);
+const editingId = ref(null);
 const submitting = ref(false);
-const error = ref("");
+const formError = ref("");
+const formInitialValues = ref({});
 
-const form = reactive({
-  sku: "",
-  name: "",
-  unit_of_measure: "",
-  inventory_account_id: "",
-  cogs_account_id: "",
-});
-
-async function loadAll() {
-  const businessId = businessStore.activeBusinessId;
-  if (!businessId) return;
-  const [itemsRes, acctRes] = await Promise.all([
-    api.get(`/businesses/${businessId}/inventory-items`),
-    api.get(`/businesses/${businessId}/accounts`),
-  ]);
-  items.value = itemsRes.data;
-  accounts.value = acctRes.data;
+async function loadGlAccounts() {
+  if (!businessStore.activeBusinessId) return;
+  const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/accounts`);
+  const options = data.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }));
+  createFields.find((f) => f.key === "inventory_account_id").options = options;
+  createFields.find((f) => f.key === "cogs_account_id").options = options;
 }
 
-async function onCreate() {
-  error.value = "";
+function openCreate() {
+  editingId.value = null;
+  fields.value = createFields;
+  formInitialValues.value = { inventory_account_id: "", cogs_account_id: "" };
+  formError.value = "";
+  showForm.value = true;
+}
+
+function openEdit(item) {
+  editingId.value = item.id;
+  fields.value = editFields;
+  formInitialValues.value = { ...item, is_active: item.is_active !== false };
+  formError.value = "";
+  showForm.value = true;
+}
+
+async function onSubmit(values) {
+  formError.value = "";
   submitting.value = true;
   try {
-    await api.post(`/businesses/${businessStore.activeBusinessId}/inventory-items`, form);
-    form.sku = "";
-    form.name = "";
-    form.unit_of_measure = "";
+    if (editingId.value) {
+      await update(editingId.value, values);
+    } else {
+      await create(values);
+    }
     showForm.value = false;
-    await loadAll();
   } catch (err) {
-    error.value = err.response?.data?.detail || "Could not create item.";
+    formError.value = err.response?.data?.detail || "Could not save item.";
   } finally {
     submitting.value = false;
   }
 }
 
-onMounted(loadAll);
-watch(() => businessStore.activeBusinessId, loadAll);
+onMounted(loadGlAccounts);
 </script>

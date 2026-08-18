@@ -29,7 +29,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rules" :key="r.id">
+          <tr v-for="r in pagedItems" :key="r.id">
             <td class="ps-3 figure text-muted">{{ r.rule_code }}</td>
             <td class="fw-medium">
               {{ r.name }}
@@ -59,6 +59,13 @@
         </tbody>
       </table>
 
+      <PaginationBar
+        v-if="rules.length"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total-items="totalItems"
+      />
+
       <div v-if="!loading && !rules.length" class="empty-state">
         <i class="bi bi-percent"></i>
         No tax rules yet. Add one to apply VAT or withholding tax to invoices and bills.
@@ -83,10 +90,13 @@ import { onMounted, ref, watch } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
 import EntityFormModal from "../components/EntityFormModal.vue";
+import PaginationBar from "../components/PaginationBar.vue";
+import { usePagination } from "../composables/usePagination";
 
 const businessStore = useBusinessStore();
 const rules = ref([]);
 const loading = ref(true);
+const { page, pageSize, pagedItems, totalItems } = usePagination(rules);
 
 const showForm = ref(false);
 const editingId = ref(null);
