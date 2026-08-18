@@ -1,0 +1,23 @@
+added 62 packages, and audited 63 packages in 10s
+
+13 packages are looking for funding
+  run `npm fund` for details
+
+2 vulnerabilities (1 moderate, 1 high)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.19.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.19.0
+npm notice To update run: npm install -g npm@11.19.0
+npm notice
+
+[5/5] Setup complete.
+
+  Next steps:
+    - Run scripts\run.bat to start the backend and frontend for local development.
+    - Run scripts\build_exe.bat to build a single-file Windows executable.
+    - See docs\POSTGRES_MIGRATION.md to switch from SQLite to PostgreSQL.
