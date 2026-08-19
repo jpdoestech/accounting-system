@@ -92,8 +92,6 @@ function applyCustom() {
   padding: 0.55rem 0.9rem;
   border-top: 1px solid var(--border);
   background: #fafbfc;
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
+  flex-shrink: 0;
 }
 </style>

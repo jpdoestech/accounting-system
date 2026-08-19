@@ -192,11 +192,39 @@ a:hover {
   border-bottom: 1px solid var(--border);
 }
 
+/* .app-main is a flex column filling the space below the topbar.
+   Each view's root element (rendered by <router-view>, always a
+   single top-level <div>) becomes a flex column too, via
+   ".view-root" below -- its header/intro stays whatever size it
+   naturally needs, and its ".view-scroll-area" (a .card, or a .row
+   for the split transactional views) is the ONE piece that grows to
+   fill the leftover space and scrolls internally. Nothing about the
+   page itself scrolls; the browser's own scrollbar never appears on
+   desktop/tablet unless a screen is genuinely too short even for
+   that -- see the mobile media query at the bottom of this file for
+   the small-screen fallback to normal whole-page scrolling. */
 .app-main {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 1.25rem 1.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.view-scroll-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ==========================================================================
@@ -253,15 +281,17 @@ a:hover {
    rows scroll underneath, and keep the PaginationBar OUTSIDE this
    wrapper (as a sibling, right after it) so pagination never scrolls
    out of view either -- it's pinned below the scrolling area instead. */
-/* Sticky table header. .table-scroll is deliberately NOT its own
-   scroll container (no max-height/overflow here) -- .app-main is the
-   single scrolling region for the whole page, and position:sticky on
-   the header anchors to that. A second, separately-scrolling box here
-   would double up scrollbars and clip rows out of view, which is
-   exactly what we don't want: all of a list's rows render normally,
-   the page scrolls once, and the header/pagination just stay pinned
-   as you scroll past them. */
+/* The actual scrolling region: only the rows scroll here. It fills
+   whatever height its flex parent (.view-scroll-area, i.e. the .card
+   or the relevant column of a split transactional view) gives it --
+   NOT a fixed pixel height -- so it naturally adapts to any screen
+   size instead of guessing a max-height that's wrong on some
+   monitors and too tall/short on others. */
 .table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
   position: relative;
 }
 
@@ -484,4 +514,59 @@ a:hover {
   color: var(--border);
   display: block;
   margin-bottom: 0.4rem;
+}
+
+/* ==========================================================================
+   Mobile / narrow-tablet fallback (< 768px)
+   The desktop pattern above -- fixed header/pagination chrome, only
+   the table body scrolling in a bounded box -- assumes a sidebar
+   sitting beside a reasonably tall content column. On a phone that
+   doesn't hold up: a 232px sidebar eats most of the width, and a
+   height-constrained scroll box just adds a second cramped scrollbar
+   on top of an already-small screen. Below this breakpoint we drop
+   the height:100vh/overflow:hidden constraints entirely and let the
+   whole page scroll normally instead, which is what people actually
+   expect on mobile -- the sidebar stacks above the content instead of
+   sitting beside it, and every element just flows in normal document
+   order down the page.
+   ========================================================================== */
+@media (max-width: 767px) {
+  .app-shell {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .app-sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 40vh;
+    position: relative;
+  }
+
+  .app-content {
+    height: auto;
+    overflow: visible;
+  }
+
+  .app-main {
+    overflow: visible;
+    min-height: 0;
+  }
+
+  .view-root,
+  .view-scroll-area {
+    min-height: 0;
+  }
+
+  .table-scroll {
+    flex: none;
+    max-height: 60vh;
+  }
+
+  .app-topbar {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
 }

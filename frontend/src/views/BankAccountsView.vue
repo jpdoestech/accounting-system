@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="view-root">
     <div class="page-header">
       <div>
         <span class="eyebrow">Banking · Master data</span>
@@ -10,7 +10,7 @@
       </button>
     </div>
 
-    <div class="card">
+    <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
         <thead>

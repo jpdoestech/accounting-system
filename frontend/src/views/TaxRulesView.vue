@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="view-root">
     <div class="page-header">
       <div>
         <span class="eyebrow">Accounting · Master data</span>
@@ -15,7 +15,7 @@
       invoice/bill lines reference a rule by its code and date range.
     </p>
 
-    <div class="card">
+    <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
         <thead>
