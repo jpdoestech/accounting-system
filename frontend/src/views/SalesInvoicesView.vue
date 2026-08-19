@@ -5,9 +5,15 @@
         <span class="eyebrow">Sales</span>
         <h4 class="mb-0">Sales Invoices</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New Sales Invoice
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search no., customer, description…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New Sales Invoice
+        </button>
+      </div>
     </div>
 
     <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
@@ -15,8 +21,18 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+          <colgroup>
+            <col style="width: 32px" />
+            <col style="width: 13%" />
+            <col style="width: 11%" />
+            <col style="width: 24%" />
+            <col style="width: 13%" />
+            <col style="width: 11%" />
+            <col style="width: 130px" />
+          </colgroup>
           <thead>
             <tr>
+              <th></th>
               <th class="ps-3">No.</th>
               <th>Date</th>
               <th>Customer</th>
@@ -26,36 +42,79 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="inv in pagedItems" :key="inv.id">
-              <td class="ps-3 fw-medium">{{ inv.invoice_number }}</td>
-              <td class="text-muted small">{{ inv.invoice_date }}</td>
-              <td class="text-muted">{{ customerName(inv.customer_id) }}</td>
-              <td class="text-end figure">{{ inv.grand_total }}</td>
-              <td>
-                <span class="badge-pill" :class="inv.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
-                  {{ inv.status }}
-                </span>
-              </td>
-              <td class="table-actions pe-3">
-                <span v-if="inv.status === 'Draft'" class="row-action-links">
-                  <button class="row-action-link" @click="openEdit(inv.id)">Edit</button>
-                  <button class="row-action-link row-action-link--danger" @click="askDelete(inv)">Delete</button>
-                  <button
-                    class="row-action-link"
-                    :disabled="postingId === inv.id"
-                    @click="onPost(inv.id)"
-                  >
-                    Post
-                  </button>
-                </span>
-              </td>
-            </tr>
+            <template v-for="inv in pagedItems" :key="inv.id">
+              <tr class="invoice-row" @click="toggleExpand(inv.id)">
+                <td class="text-center text-muted">
+                  <i class="bi" :class="expandedId === inv.id ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                </td>
+                <td class="ps-3 fw-medium">{{ inv.invoice_number }}</td>
+                <td class="text-muted small">{{ inv.invoice_date }}</td>
+                <td class="text-muted text-truncate">{{ customerName(inv.customer_id) }}</td>
+                <td class="text-end figure">{{ formatMoney(inv.grand_total) }}</td>
+                <td>
+                  <span class="badge-pill" :class="inv.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
+                    {{ inv.status }}
+                  </span>
+                </td>
+                <td class="table-actions pe-3" @click.stop>
+                  <span v-if="inv.status === 'Draft'" class="row-action-links">
+                    <button class="row-action-link" @click="openEdit(inv.id)">Edit</button>
+                    <button class="row-action-link row-action-link--danger" @click="askDelete(inv)">Delete</button>
+                    <button
+                      class="row-action-link"
+                      :disabled="postingId === inv.id"
+                      @click="onPost(inv.id)"
+                    >
+                      Post
+                    </button>
+                  </span>
+                </td>
+              </tr>
+              <tr v-if="expandedId === inv.id" class="invoice-detail-row">
+                <td colspan="7" class="p-0">
+                  <div class="invoice-detail">
+                    <div v-if="loadingDetail" class="text-muted small py-2">Loading lines…</div>
+                    <table v-else class="table table-sm mb-0 invoice-detail__table">
+                      <thead>
+                        <tr>
+                          <th>Description</th>
+                          <th>Account</th>
+                          <th>Item</th>
+                          <th class="text-end">Qty</th>
+                          <th class="text-end">Unit Price</th>
+                          <th>Tax</th>
+                          <th class="text-end">Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(line, i) in detailLines" :key="i">
+                          <td>{{ line.description }}</td>
+                          <td class="text-muted">{{ accountLabel(line.revenue_account_id) }}</td>
+                          <td class="text-muted">{{ itemLabel(line.item_id) }}</td>
+                          <td class="text-end figure">{{ formatNumber(line.quantity) }}</td>
+                          <td class="text-end figure">{{ formatMoney(line.unit_price) }}</td>
+                          <td class="text-muted">{{ line.tax_rule_code || "—" }}</td>
+                          <td class="text-end figure">{{ formatMoney(line.line_amount) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
+          <tfoot v-if="filtered.length">
+            <tr>
+              <td colspan="4" class="ps-3 text-end fw-semibold">Grand Total (all filtered invoices)</td>
+              <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
       <PaginationBar
-        v-if="invoices.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -63,7 +122,11 @@
 
       <div v-if="!invoices.length" class="empty-state">
         <i class="bi bi-receipt"></i>
-        No invoices yet. Click "New Bill Invoice" to create your first one.
+        No invoices yet. Click "New Sales Invoice" to create your first one.
+      </div>
+      <div v-else-if="!filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No invoices match "{{ search }}".
       </div>
     </div>
 
@@ -163,10 +226,11 @@ import PaginationBar from "../components/PaginationBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import FormModal from "../components/FormModal.vue";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
+import { formatMoney, formatNumber } from "../utils/format";
 
 const businessStore = useBusinessStore();
 const invoices = ref([]);
-const { page, pageSize, pagedItems, totalItems } = usePagination(invoices);
 const customers = ref([]);
 const accounts = ref([]);
 const taxRules = ref([]);
@@ -183,6 +247,51 @@ const deleting = ref(false);
 
 function customerName(id) {
   return customers.value.find((c) => c.id === id)?.name || "—";
+}
+function accountLabel(id) {
+  const a = accounts.value.find((x) => x.id === id);
+  return a ? `${a.code} — ${a.name}` : "—";
+}
+function itemLabel(id) {
+  if (!id) return "—";
+  const it = items.value.find((x) => x.id === id);
+  return it ? `${it.sku} — ${it.name}` : "—";
+}
+
+const { query: search, filtered } = useTextFilter(invoices, (inv) => [
+  inv.invoice_number,
+  inv.invoice_date,
+  customerName(inv.customer_id),
+  inv.status,
+]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
+
+// Grand total across every invoice matching the current search (not
+// just the current page) -- what "grand total" means to an
+// accountant is the total of everything they're looking at, not one
+// screenful of it.
+const grandTotal = computed(() => filtered.value.reduce((sum, inv) => sum + Number(inv.grand_total || 0), 0));
+
+// Expand-in-place row detail: click a row to reveal its line items
+// (description/account/item/qty/price/tax) without leaving the list.
+const expandedId = ref(null);
+const detailLines = ref([]);
+const loadingDetail = ref(false);
+
+async function toggleExpand(invoiceId) {
+  if (expandedId.value === invoiceId) {
+    expandedId.value = null;
+    detailLines.value = [];
+    return;
+  }
+  expandedId.value = invoiceId;
+  loadingDetail.value = true;
+  try {
+    const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${invoiceId}`);
+    detailLines.value = data.lines;
+  } finally {
+    loadingDetail.value = false;
+  }
 }
 
 function blankForm() {
@@ -225,9 +334,6 @@ function openCreate() {
 }
 
 function requestCloseModal() {
-  // Route through FormModal's own confirm-before-discard logic rather
-  // than closing directly, so the Cancel button behaves the same as
-  // clicking the backdrop or the X.
   showForm.value = false;
 }
 
@@ -333,3 +439,28 @@ async function confirmDelete() {
 
 onMounted(loadAll);
 </script>
+
+<style scoped>
+.invoice-row {
+  cursor: pointer;
+}
+
+.invoice-detail-row td {
+  background: #fafbfc;
+}
+
+.invoice-detail {
+  padding: 0.5rem 1rem 0.75rem 2.5rem;
+}
+
+.invoice-detail__table {
+  background: transparent;
+}
+
+.invoice-detail__table thead th {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+</style>

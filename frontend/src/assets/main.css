@@ -217,11 +217,22 @@ a:hover {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
+/* Deliberately NOT flex:1 -- a card that force-grows to fill all
+   available height leaves a dead blank gap below a short table (e.g.
+   3 rows) because the box gets stretched taller than its content
+   needs. Instead this sizes to its own content, capped by an
+   adaptive max-height so a genuinely long table still scrolls
+   internally instead of pushing the page's header/pagination off
+   screen. The result: few rows -> pagination sits right under the
+   last row, no gap. many rows -> the table scrolls, header/pagination
+   stay put. */
 .view-scroll-area {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -273,23 +284,24 @@ a:hover {
 .table-actions {
   white-space: nowrap;
   text-align: right;
-  width: 1%;
+  width: 130px;
 }
 
 /* Scrollable table body with a sticky header row. Wrap a <table> in
    <div class="table-scroll">...</div> so the header stays pinned while
    rows scroll underneath, and keep the PaginationBar OUTSIDE this
    wrapper (as a sibling, right after it) so pagination never scrolls
-   out of view either -- it's pinned below the scrolling area instead. */
-/* The actual scrolling region: only the rows scroll here. It fills
-   whatever height its flex parent (.view-scroll-area, i.e. the .card
-   or the relevant column of a split transactional view) gives it --
-   NOT a fixed pixel height -- so it naturally adapts to any screen
-   size instead of guessing a max-height that's wrong on some
-   monitors and too tall/short on others. */
+   out of view either -- it's pinned below the scrolling area instead.
+   Deliberately not flex:1 -- see .view-scroll-area above for why: a
+   short table should hug its own content height, not stretch to fill
+   the screen. The max-height cap is what actually protects against a
+   long table pushing the page's header/pagination out of view; it's
+   viewport-relative (not a fixed guess) so it scales across screen
+   sizes, and only kicks in once there's enough data to need it. */
 .table-scroll {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: calc(100vh - 260px);
   overflow-y: auto;
   overflow-x: auto;
   position: relative;
@@ -297,6 +309,10 @@ a:hover {
 
 .table-scroll table {
   margin-bottom: 0;
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .table-scroll thead th {
@@ -305,6 +321,9 @@ a:hover {
   z-index: 2;
   background: #f6f7f9;
   box-shadow: 0 1px 0 var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .table-scroll tfoot td {
