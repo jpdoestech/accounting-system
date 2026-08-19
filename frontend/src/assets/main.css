@@ -174,8 +174,11 @@ a:hover {
 }
 
 .app-content {
-  height: 100vh;
+  flex: 1;
   min-width: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
@@ -250,10 +253,15 @@ a:hover {
    rows scroll underneath, and keep the PaginationBar OUTSIDE this
    wrapper (as a sibling, right after it) so pagination never scrolls
    out of view either -- it's pinned below the scrolling area instead. */
+/* Sticky table header. .table-scroll is deliberately NOT its own
+   scroll container (no max-height/overflow here) -- .app-main is the
+   single scrolling region for the whole page, and position:sticky on
+   the header anchors to that. A second, separately-scrolling box here
+   would double up scrollbars and clip rows out of view, which is
+   exactly what we don't want: all of a list's rows render normally,
+   the page scrolls once, and the header/pagination just stay pinned
+   as you scroll past them. */
 .table-scroll {
-  max-height: 520px;
-  overflow-y: auto;
-  overflow-x: auto;
   position: relative;
 }
 
@@ -442,6 +450,26 @@ a:hover {
   margin-bottom: 1rem;
   flex-wrap: wrap;
   gap: 0.6rem;
+}
+
+.search-box {
+  position: relative;
+  width: 260px;
+  max-width: 100%;
+}
+
+.search-box .bi-search {
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.search-box input {
+  padding-left: 1.8rem;
 }
 
 .empty-state {

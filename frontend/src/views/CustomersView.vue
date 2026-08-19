@@ -5,9 +5,15 @@
         <span class="eyebrow">Sales · Master data</span>
         <h4 class="mb-0">Customers</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New customer
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search name, TIN, email, phone…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New customer
+        </button>
+      </div>
     </div>
 
     <div class="card">
@@ -40,7 +46,7 @@
       </div>
 
       <PaginationBar
-        v-if="items.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -49,6 +55,10 @@
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-people"></i>
         No customers yet. Add your first one to start invoicing.
+      </div>
+      <div v-else-if="!loading && items.length && !filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No customers match "{{ search }}".
       </div>
     </div>
 
@@ -81,9 +91,11 @@ import ConfirmDialog from "../components/ConfirmDialog.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import { useCrudResource } from "../composables/useCrudResource";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
 
 const { items, loading, create, update, remove } = useCrudResource("/customers");
-const { page, pageSize, pagedItems, totalItems } = usePagination(items);
+const { query: search, filtered } = useTextFilter(items, (c) => [c.name, c.tin, c.email, c.phone]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
 
 const fields = [
   { key: "name", label: "Name", required: true, colClass: "col-md-8" },

@@ -5,9 +5,15 @@
         <span class="eyebrow">Accounting · Master data</span>
         <h4 class="mb-0">Chart of Accounts</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New account
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search code, name, type…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New account
+        </button>
+      </div>
     </div>
 
     <div class="card">
@@ -49,7 +55,7 @@
       </div>
 
       <PaginationBar
-        v-if="items.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -58,6 +64,10 @@
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-diagram-3"></i>
         No accounts yet. Add your first one to start recording transactions.
+      </div>
+      <div v-else-if="!loading && items.length && !filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No accounts match "{{ search }}".
       </div>
     </div>
 
@@ -81,10 +91,12 @@ import EntityFormModal from "../components/EntityFormModal.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import { useCrudResource } from "../composables/useCrudResource";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
 
 const businessStore = useBusinessStore();
 const { items, loading, create, update } = useCrudResource("/accounts");
-const { page, pageSize, pagedItems, totalItems } = usePagination(items);
+const { query: search, filtered } = useTextFilter(items, (a) => [a.code, a.name, a.account_type]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
 
 const accountTypes = [
   "Asset",
