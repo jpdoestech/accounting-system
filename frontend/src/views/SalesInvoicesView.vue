@@ -1,64 +1,79 @@
 <template>
-  <div class="row g-4">
-    <div class="col-lg-7">
-      <h4>Sales Invoices</h4>
-      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+  <div>
+    <div class="page-header">
+      <div>
+        <span class="eyebrow">Sales</span>
+        <h4 class="mb-0">Sales Invoices</h4>
+      </div>
+      <button class="btn btn-primary btn-sm" @click="openCreate">
+        <i class="bi bi-plus-lg"></i> New Sales Invoice
+      </button>
+    </div>
+
+    <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+
+    <div class="card">
       <div class="table-scroll">
-        <table class="table table-sm table-hover bg-white">
-        <thead>
-          <tr>
-            <th>No.</th>
-            <th>Date</th>
-            <th>Total</th>
-            <th>Status</th>
-            <th class="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="inv in pagedItems" :key="inv.id">
-            <td>{{ inv.invoice_number }}</td>
-            <td class="text-muted small">{{ inv.invoice_date }}</td>
-            <td class="text-end">{{ inv.grand_total }}</td>
-            <td>
-              <span :class="inv.status === 'Posted' ? 'badge text-bg-success' : 'badge text-bg-secondary'">
-                {{ inv.status }}
-              </span>
-            </td>
-            <td class="text-end">
-              <span v-if="inv.status === 'Draft'" class="row-action-links justify-content-end">
-                <button class="row-action-link" @click="openEdit(inv.id)">Edit</button>
-                <button class="row-action-link row-action-link--danger" @click="askDelete(inv)">Delete</button>
-                <button
-                  class="btn btn-sm btn-outline-primary ms-1"
-                  :disabled="postingId === inv.id"
-                  @click="onPost(inv.id)"
-                >
-                  <span v-if="postingId === inv.id" class="spinner-border spinner-border-sm me-1"></span>
-                  Post
-                </button>
-              </span>
-            </td>
-          </tr>
-          <tr v-if="!invoices.length">
-            <td colspan="5" class="text-muted text-center py-3">No invoices yet.</td>
-          </tr>
-        </tbody>
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">No.</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th class="text-end">Total</th>
+              <th>Status</th>
+              <th class="table-actions pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="inv in pagedItems" :key="inv.id">
+              <td class="ps-3 fw-medium">{{ inv.invoice_number }}</td>
+              <td class="text-muted small">{{ inv.invoice_date }}</td>
+              <td class="text-muted">{{ customerName(inv.customer_id) }}</td>
+              <td class="text-end figure">{{ inv.grand_total }}</td>
+              <td>
+                <span class="badge-pill" :class="inv.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
+                  {{ inv.status }}
+                </span>
+              </td>
+              <td class="table-actions pe-3">
+                <span v-if="inv.status === 'Draft'" class="row-action-links">
+                  <button class="row-action-link" @click="openEdit(inv.id)">Edit</button>
+                  <button class="row-action-link row-action-link--danger" @click="askDelete(inv)">Delete</button>
+                  <button
+                    class="row-action-link"
+                    :disabled="postingId === inv.id"
+                    @click="onPost(inv.id)"
+                  >
+                    Post
+                  </button>
+                </span>
+              </td>
+            </tr>
+          </tbody>
         </table>
       </div>
+
       <PaginationBar
         v-if="invoices.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
       />
+
+      <div v-if="!invoices.length" class="empty-state">
+        <i class="bi bi-receipt"></i>
+        No invoices yet. Click "New Bill Invoice" to create your first one.
+      </div>
     </div>
 
-    <div class="col-lg-5">
-      <div class="d-flex align-items-center justify-content-between">
-        <h4>{{ editingId ? "Edit Invoice" : "New Invoice" }}</h4>
-        <button v-if="editingId" type="button" class="btn btn-sm btn-link" @click="resetForm">Cancel edit</button>
-      </div>
-      <form @submit.prevent="onSubmit" class="card p-3">
+    <FormModal
+      v-model:show="showForm"
+      :title="editingId ? 'Edit Invoice' : 'New Sales Invoice'"
+      :is-dirty="isDirty"
+      size="lg"
+    >
+      <form @submit.prevent="onSubmit">
         <div class="mb-2">
           <label class="form-label">Customer</label>
           <select v-model="form.customer_id" class="form-select" required>
@@ -119,12 +134,15 @@
         </button>
 
         <div v-if="error" class="alert alert-danger py-2 small">{{ error }}</div>
-        <button type="submit" class="btn btn-primary" :disabled="submitting">
-          <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
-          {{ editingId ? "Save changes" : "Create Draft" }}
-        </button>
+        <div class="d-flex justify-content-end gap-2">
+          <button type="button" class="btn btn-outline-secondary" @click="requestCloseModal">Cancel</button>
+          <button type="submit" class="btn btn-primary" :disabled="submitting">
+            <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
+            {{ editingId ? "Save changes" : "Create Draft" }}
+          </button>
+        </div>
       </form>
-    </div>
+    </FormModal>
 
     <ConfirmDialog
       :show="!!pendingDelete"
@@ -138,11 +156,12 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
 import PaginationBar from "../components/PaginationBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import FormModal from "../components/FormModal.vue";
 import { usePagination } from "../composables/usePagination";
 
 const businessStore = useBusinessStore();
@@ -157,9 +176,14 @@ const submitting = ref(false);
 const postError = ref("");
 const postingId = ref(null);
 const editingId = ref(null);
+const showForm = ref(false);
 
 const pendingDelete = ref(null);
 const deleting = ref(false);
+
+function customerName(id) {
+  return customers.value.find((c) => c.id === id)?.name || "—";
+}
 
 function blankForm() {
   return {
@@ -175,6 +199,13 @@ function blankLine() {
 
 const form = reactive(blankForm());
 const lines = ref([blankLine()]);
+const pristineSnapshot = ref("");
+
+const isDirty = computed(() => JSON.stringify({ form, lines: lines.value }) !== pristineSnapshot.value);
+
+function snapshot() {
+  pristineSnapshot.value = JSON.stringify({ form, lines: lines.value });
+}
 
 function addLine() {
   lines.value.push(blankLine());
@@ -185,6 +216,19 @@ function resetForm() {
   error.value = "";
   Object.assign(form, blankForm());
   lines.value = [blankLine()];
+}
+
+function openCreate() {
+  resetForm();
+  showForm.value = true;
+  snapshot();
+}
+
+function requestCloseModal() {
+  // Route through FormModal's own confirm-before-discard logic rather
+  // than closing directly, so the Cancel button behaves the same as
+  // clicking the backdrop or the X.
+  showForm.value = false;
 }
 
 async function loadAll() {
@@ -221,7 +265,8 @@ async function openEdit(invoiceId) {
         item_id: l.item_id || "",
       }))
     : [blankLine()];
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  showForm.value = true;
+  snapshot();
 }
 
 function buildPayload() {
@@ -243,6 +288,7 @@ async function onSubmit() {
     } else {
       await api.post(`/businesses/${businessId}/sales-invoices`, buildPayload());
     }
+    showForm.value = false;
     resetForm();
     await loadAll();
   } catch (err) {
@@ -274,7 +320,10 @@ async function confirmDelete() {
   deleting.value = true;
   try {
     await api.delete(`/businesses/${businessStore.activeBusinessId}/sales-invoices/${pendingDelete.value.id}`);
-    if (editingId.value === pendingDelete.value.id) resetForm();
+    if (editingId.value === pendingDelete.value.id) {
+      showForm.value = false;
+      resetForm();
+    }
     pendingDelete.value = null;
     await loadAll();
   } finally {

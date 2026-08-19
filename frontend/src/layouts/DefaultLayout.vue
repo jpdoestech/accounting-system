@@ -78,7 +78,7 @@
       </nav>
     </aside>
 
-    <div class="flex-grow-1 d-flex flex-column">
+    <div class="app-content d-flex flex-column">
       <header class="app-topbar" v-if="businessStore.businesses.length">
         <select
           class="form-select form-select-sm w-auto"

@@ -98,7 +98,8 @@ a:hover {
    ========================================================================== */
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app-sidebar {
@@ -109,8 +110,6 @@ a:hover {
   border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 0;
   height: 100vh;
   overflow-y: auto;
 }
@@ -174,10 +173,14 @@ a:hover {
   color: var(--sidebar-active-text);
 }
 
+.app-content {
+  height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .app-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -188,7 +191,8 @@ a:hover {
 
 .app-main {
   flex: 1;
-  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   padding: 1.25rem 1.5rem 2.5rem;
 }
 

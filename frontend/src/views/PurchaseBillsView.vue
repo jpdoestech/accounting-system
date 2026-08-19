@@ -1,64 +1,75 @@
 <template>
-  <div class="row g-4">
-    <div class="col-lg-7">
-      <h4>Purchase Bills</h4>
-      <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+  <div>
+    <div class="page-header">
+      <div>
+        <span class="eyebrow">Purchases</span>
+        <h4 class="mb-0">Purchase Bills</h4>
+      </div>
+      <button class="btn btn-primary btn-sm" @click="openCreate">
+        <i class="bi bi-plus-lg"></i> New Bill
+      </button>
+    </div>
+
+    <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
+
+    <div class="card">
       <div class="table-scroll">
-        <table class="table table-sm table-hover bg-white">
-        <thead>
-          <tr>
-            <th>No.</th>
-            <th>Date</th>
-            <th>Due to Vendor</th>
-            <th>Status</th>
-            <th class="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="bill in pagedItems" :key="bill.id">
-            <td>{{ bill.bill_number }}</td>
-            <td class="text-muted small">{{ bill.bill_date }}</td>
-            <td class="text-end">{{ bill.amount_due_to_vendor }}</td>
-            <td>
-              <span :class="bill.status === 'Posted' ? 'badge text-bg-success' : 'badge text-bg-secondary'">
-                {{ bill.status }}
-              </span>
-            </td>
-            <td class="text-end">
-              <span v-if="bill.status === 'Draft'" class="row-action-links justify-content-end">
-                <button class="row-action-link" @click="openEdit(bill.id)">Edit</button>
-                <button class="row-action-link row-action-link--danger" @click="askDelete(bill)">Delete</button>
-                <button
-                  class="btn btn-sm btn-outline-primary ms-1"
-                  :disabled="postingId === bill.id"
-                  @click="onPost(bill.id)"
-                >
-                  <span v-if="postingId === bill.id" class="spinner-border spinner-border-sm me-1"></span>
-                  Post
-                </button>
-              </span>
-            </td>
-          </tr>
-          <tr v-if="!bills.length">
-            <td colspan="5" class="text-muted text-center py-3">No bills yet.</td>
-          </tr>
-        </tbody>
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">No.</th>
+              <th>Date</th>
+              <th>Vendor</th>
+              <th class="text-end">Due to Vendor</th>
+              <th>Status</th>
+              <th class="table-actions pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="bill in pagedItems" :key="bill.id">
+              <td class="ps-3 fw-medium">{{ bill.bill_number }}</td>
+              <td class="text-muted small">{{ bill.bill_date }}</td>
+              <td class="text-muted">{{ vendorName(bill.vendor_id) }}</td>
+              <td class="text-end figure">{{ bill.amount_due_to_vendor }}</td>
+              <td>
+                <span class="badge-pill" :class="bill.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
+                  {{ bill.status }}
+                </span>
+              </td>
+              <td class="table-actions pe-3">
+                <span v-if="bill.status === 'Draft'" class="row-action-links">
+                  <button class="row-action-link" @click="openEdit(bill.id)">Edit</button>
+                  <button class="row-action-link row-action-link--danger" @click="askDelete(bill)">Delete</button>
+                  <button class="row-action-link" :disabled="postingId === bill.id" @click="onPost(bill.id)">
+                    Post
+                  </button>
+                </span>
+              </td>
+            </tr>
+          </tbody>
         </table>
       </div>
+
       <PaginationBar
         v-if="bills.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
       />
+
+      <div v-if="!bills.length" class="empty-state">
+        <i class="bi bi-file-earmark-text"></i>
+        No bills yet. Click "New Bill" to record your first purchase.
+      </div>
     </div>
 
-    <div class="col-lg-5">
-      <div class="d-flex align-items-center justify-content-between">
-        <h4>{{ editingId ? "Edit Bill" : "New Bill" }}</h4>
-        <button v-if="editingId" type="button" class="btn btn-sm btn-link" @click="resetForm">Cancel edit</button>
-      </div>
-      <form @submit.prevent="onSubmit" class="card p-3">
+    <FormModal
+      v-model:show="showForm"
+      :title="editingId ? 'Edit Bill' : 'New Purchase Bill'"
+      :is-dirty="isDirty"
+      size="lg"
+    >
+      <form @submit.prevent="onSubmit">
         <div class="mb-2">
           <label class="form-label">Vendor</label>
           <select v-model="form.vendor_id" class="form-select" required>
@@ -125,12 +136,15 @@
         </button>
 
         <div v-if="error" class="alert alert-danger py-2 small">{{ error }}</div>
-        <button type="submit" class="btn btn-primary" :disabled="submitting">
-          <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
-          {{ editingId ? "Save changes" : "Create Draft" }}
-        </button>
+        <div class="d-flex justify-content-end gap-2">
+          <button type="button" class="btn btn-outline-secondary" @click="showForm = false">Cancel</button>
+          <button type="submit" class="btn btn-primary" :disabled="submitting">
+            <span v-if="submitting" class="spinner-border spinner-border-sm me-1"></span>
+            {{ editingId ? "Save changes" : "Create Draft" }}
+          </button>
+        </div>
       </form>
-    </div>
+    </FormModal>
 
     <ConfirmDialog
       :show="!!pendingDelete"
@@ -148,6 +162,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import api from "../services/api";
 import PaginationBar from "../components/PaginationBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import FormModal from "../components/FormModal.vue";
 import { usePagination } from "../composables/usePagination";
 import { useBusinessStore } from "../stores/business";
 
@@ -163,12 +178,17 @@ const submitting = ref(false);
 const postError = ref("");
 const postingId = ref(null);
 const editingId = ref(null);
+const showForm = ref(false);
 
 const pendingDelete = ref(null);
 const deleting = ref(false);
 
 const vatRules = computed(() => taxRules.value.filter((r) => r.tax_type === "VAT"));
 const withholdingRules = computed(() => taxRules.value.filter((r) => r.tax_type === "Withholding"));
+
+function vendorName(id) {
+  return vendors.value.find((v) => v.id === id)?.name || "—";
+}
 
 function blankForm() {
   return {
@@ -192,6 +212,13 @@ function blankLine() {
 
 const form = reactive(blankForm());
 const lines = ref([blankLine()]);
+const pristineSnapshot = ref("");
+
+const isDirty = computed(() => JSON.stringify({ form, lines: lines.value }) !== pristineSnapshot.value);
+
+function snapshot() {
+  pristineSnapshot.value = JSON.stringify({ form, lines: lines.value });
+}
 
 function addLine() {
   lines.value.push(blankLine());
@@ -202,6 +229,12 @@ function resetForm() {
   error.value = "";
   Object.assign(form, blankForm());
   lines.value = [blankLine()];
+}
+
+function openCreate() {
+  resetForm();
+  showForm.value = true;
+  snapshot();
 }
 
 async function loadAll() {
@@ -239,7 +272,8 @@ async function openEdit(billId) {
         item_id: l.item_id || "",
       }))
     : [blankLine()];
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  showForm.value = true;
+  snapshot();
 }
 
 function buildPayload() {
@@ -266,6 +300,7 @@ async function onSubmit() {
     } else {
       await api.post(`/businesses/${businessId}/purchase-bills`, buildPayload());
     }
+    showForm.value = false;
     resetForm();
     await loadAll();
   } catch (err) {
@@ -297,7 +332,10 @@ async function confirmDelete() {
   deleting.value = true;
   try {
     await api.delete(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${pendingDelete.value.id}`);
-    if (editingId.value === pendingDelete.value.id) resetForm();
+    if (editingId.value === pendingDelete.value.id) {
+      showForm.value = false;
+      resetForm();
+    }
     pendingDelete.value = null;
     await loadAll();
   } finally {
