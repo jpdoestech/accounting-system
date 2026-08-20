@@ -20,15 +20,15 @@
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 data-grid data-grid--purchase-bills">
           <colgroup>
-            <col style="width: 32px" />
+            <col style="width: 3%" />
             <col style="width: 13%" />
             <col style="width: 11%" />
-            <col style="width: 24%" />
+            <col style="width: 31%" />
             <col style="width: 13%" />
             <col style="width: 11%" />
-            <col style="width: 130px" />
+            <col style="width: 18%" />
           </colgroup>
           <thead>
             <tr>
@@ -36,7 +36,7 @@
               <th class="ps-3">No.</th>
               <th>Date</th>
               <th>Vendor</th>
-              <th class="text-end">Due to Vendor</th>
+              <th class="text-end">Grand Total</th>
               <th>Status</th>
               <th class="table-actions pe-3">Actions</th>
             </tr>
@@ -50,7 +50,7 @@
                 <td class="ps-3 fw-medium">{{ bill.bill_number }}</td>
                 <td class="text-muted small">{{ bill.bill_date }}</td>
                 <td class="text-muted text-truncate">{{ vendorName(bill.vendor_id) }}</td>
-                <td class="text-end figure">{{ formatMoney(bill.amount_due_to_vendor) }}</td>
+                <td class="text-end figure">{{ formatMoney(bill.grand_total) }}</td>
                 <td>
                   <span class="badge-pill" :class="bill.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
                     {{ bill.status }}
@@ -101,13 +101,6 @@
               </tr>
             </template>
           </tbody>
-          <tfoot v-if="filtered.length">
-            <tr>
-              <td colspan="4" class="ps-3 text-end fw-semibold">Grand Total (all filtered bills)</td>
-              <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
-              <td colspan="2"></td>
-            </tr>
-          </tfoot>
         </table>
       </div>
 
@@ -116,7 +109,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span class="fw-semibold">Grand Total:</span>
+          <span class="figure fw-semibold">{{ formatMoney(grandTotal) }}</span>
+        </template>
+      </PaginationBar>
 
       <div v-if="!bills.length" class="empty-state">
         <i class="bi bi-file-earmark-text"></i>
@@ -274,7 +272,7 @@ const { query: search, filtered } = useTextFilter(bills, (bill) => [
 const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
 
 const grandTotal = computed(() =>
-  filtered.value.reduce((sum, bill) => sum + Number(bill.amount_due_to_vendor || 0), 0)
+  filtered.value.reduce((sum, bill) => sum + Number(bill.grand_total || 0), 0)
 );
 
 const expandedId = ref(null);

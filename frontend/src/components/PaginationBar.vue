@@ -5,6 +5,10 @@
       <template v-else>No rows</template>
     </div>
 
+    <div v-if="$slots.summary" class="pagination-bar__summary">
+      <slot name="summary"></slot>
+    </div>
+
     <div class="d-flex align-items-center gap-2">
       <label class="text-muted small mb-0">Rows per page</label>
       <select class="form-select form-select-sm w-auto" :value="selectValue" @change="onSelectChange">
@@ -93,5 +97,16 @@ function applyCustom() {
   border-top: 1px solid var(--border);
   background: #fafbfc;
   flex-shrink: 0;
+}
+
+.pagination-bar__summary {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  color: var(--text);
+  font-size: 0.82rem;
 }
 </style>

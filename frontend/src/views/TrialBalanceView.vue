@@ -13,7 +13,7 @@
 
     <div class="view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-sm bg-white">
+        <table class="table table-sm bg-white data-grid data-grid--trial-balance">
           <colgroup>
             <col style="width: 14%" />
             <col style="width: 46%" />
@@ -42,13 +42,6 @@
               <td colspan="4" class="text-muted text-center py-3">No accounts match "{{ search }}".</td>
             </tr>
           </tbody>
-          <tfoot v-if="filtered.length">
-            <tr class="fw-bold border-top">
-              <td colspan="2">Total</td>
-              <td class="text-end figure">{{ formatMoney(totalDebit) }}</td>
-              <td class="text-end figure">{{ formatMoney(totalCredit) }}</td>
-            </tr>
-          </tfoot>
         </table>
       </div>
       <PaginationBar
@@ -56,7 +49,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span><span class="fw-semibold">Debit:</span> <span class="figure fw-semibold">{{ formatMoney(totalDebit) }}</span></span>
+          <span><span class="fw-semibold">Credit:</span> <span class="figure fw-semibold">{{ formatMoney(totalCredit) }}</span></span>
+        </template>
+      </PaginationBar>
     </div>
   </div>
 </template>

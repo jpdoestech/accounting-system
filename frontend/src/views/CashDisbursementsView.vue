@@ -20,15 +20,15 @@
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 data-grid data-grid--cash-disbursements">
           <colgroup>
-            <col style="width: 32px" />
+            <col style="width: 3%" />
             <col style="width: 15%" />
             <col style="width: 12%" />
-            <col style="width: 26%" />
+            <col style="width: 31%" />
             <col style="width: 14%" />
             <col style="width: 11%" />
-            <col style="width: 130px" />
+            <col style="width: 14%" />
           </colgroup>
           <thead>
             <tr>
@@ -82,13 +82,6 @@
               </tr>
             </template>
           </tbody>
-          <tfoot v-if="filtered.length">
-            <tr>
-              <td colspan="3" class="ps-3 text-end fw-semibold">Grand Total (all filtered payments)</td>
-              <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
-              <td colspan="2"></td>
-            </tr>
-          </tfoot>
         </table>
       </div>
 
@@ -97,7 +90,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span class="fw-semibold">Grand Total:</span>
+          <span class="figure fw-semibold">{{ formatMoney(grandTotal) }}</span>
+        </template>
+      </PaginationBar>
 
       <div v-if="!disbursements.length" class="empty-state">
         <i class="bi bi-credit-card"></i>

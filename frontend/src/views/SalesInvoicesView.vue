@@ -20,15 +20,15 @@
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 data-grid data-grid--sales-invoices">
           <colgroup>
-            <col style="width: 32px" />
+            <col style="width: 3%" />
             <col style="width: 13%" />
             <col style="width: 11%" />
-            <col style="width: 24%" />
+            <col style="width: 31%" />
             <col style="width: 13%" />
             <col style="width: 11%" />
-            <col style="width: 130px" />
+            <col style="width: 18%" />
           </colgroup>
           <thead>
             <tr>
@@ -103,13 +103,6 @@
               </tr>
             </template>
           </tbody>
-          <tfoot v-if="filtered.length">
-            <tr>
-              <td colspan="4" class="ps-3 text-end fw-semibold">Grand Total (all filtered invoices)</td>
-              <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
-              <td colspan="2"></td>
-            </tr>
-          </tfoot>
         </table>
       </div>
 
@@ -118,7 +111,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span class="fw-semibold">Grand Total:</span>
+          <span class="figure fw-semibold">{{ formatMoney(grandTotal) }}</span>
+        </template>
+      </PaginationBar>
 
       <div v-if="!invoices.length" class="empty-state">
         <i class="bi bi-receipt"></i>

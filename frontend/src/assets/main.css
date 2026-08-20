@@ -93,6 +93,18 @@ a:hover {
   font-family: var(--font-body);
 }
 
+.text-end {
+  text-align: right !important;
+}
+
+.text-center {
+  text-align: center !important;
+}
+
+.text-start {
+  text-align: left !important;
+}
+
 /* ==========================================================================
    App shell: light flat sidebar + plain topbar
    ========================================================================== */
@@ -284,7 +296,6 @@ a:hover {
 .table-actions {
   white-space: nowrap;
   text-align: right;
-  width: 130px;
 }
 
 /* Scrollable table body with a sticky header row. Wrap a <table> in
@@ -326,6 +337,22 @@ a:hover {
   white-space: nowrap;
 }
 
+.table-scroll > table > tbody > tr:not(.row-detail):not(.invoice-detail-row) > td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-scroll > table > thead > tr > th.text-end,
+.table-scroll > table > tbody > tr > td.text-end {
+  text-align: right !important;
+}
+
+.table-scroll > table > thead > tr > th.text-center,
+.table-scroll > table > tbody > tr > td.text-center {
+  text-align: center !important;
+}
+
 .table-scroll tfoot td {
   position: sticky;
   bottom: 0;
@@ -333,9 +360,74 @@ a:hover {
   box-shadow: 0 -1px 0 var(--border);
 }
 
+.data-grid {
+  display: block;
+}
+
+.data-grid > thead,
+.data-grid > tbody {
+  display: block;
+}
+
+.data-grid > thead > tr,
+.data-grid > tbody > tr {
+  display: grid;
+  grid-template-columns: var(--grid-columns);
+  align-items: center;
+}
+
+.data-grid > thead > tr > th,
+.data-grid > tbody > tr > td {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-grid > tbody > .row-detail,
+.data-grid > tbody > .invoice-detail-row {
+  display: block;
+}
+
+.data-grid > tbody > .row-detail > td,
+.data-grid > tbody > .invoice-detail-row > td {
+  display: block;
+}
+
+.data-grid--trial-balance {
+  --grid-columns: 14% 46% 20% 20%;
+}
+
+.data-grid--tax-rules {
+  --grid-columns: 13% 25% 12% 10% 18% 10% 12%;
+}
+
+.data-grid--sales-invoices,
+.data-grid--purchase-bills {
+  --grid-columns: 3% 13% 11% 31% 13% 11% 18%;
+}
+
+.data-grid--cash-receipts,
+.data-grid--cash-disbursements {
+  --grid-columns: 3% 15% 12% 31% 14% 11% 14%;
+}
+
+.data-grid--bank-accounts {
+  --grid-columns: 22% 22% 20% 16% 10% 10%;
+}
+
+.data-grid--inventory-items {
+  --grid-columns: 12% 32% 12% 12% 14% 8% 10%;
+}
+
+.data-grid--fixed-assets {
+  --grid-columns: 12% 30% 12% 12% 12% 8% 14%;
+}
+
 /* Row actions as plain text links, manager.io-style, instead of icon buttons */
 .row-action-links {
   display: inline-flex;
+  flex-wrap: nowrap;
   gap: 0.6rem;
 }
 
@@ -346,6 +438,7 @@ a:hover {
   color: var(--blue);
   font-size: 0.8rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .row-action-link:hover {

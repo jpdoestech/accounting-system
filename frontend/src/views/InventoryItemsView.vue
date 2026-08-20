@@ -18,15 +18,15 @@
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 data-grid data-grid--inventory-items">
         <colgroup>
+          <col style="width: 12%" />
+          <col style="width: 32%" />
+          <col style="width: 12%" />
+          <col style="width: 12%" />
           <col style="width: 14%" />
-          <col style="width: 26%" />
-          <col style="width: 13%" />
-          <col style="width: 13%" />
-          <col style="width: 14%" />
+          <col style="width: 8%" />
           <col style="width: 10%" />
-          <col style="width: 130px" />
         </colgroup>
         <thead>
           <tr>
@@ -58,13 +58,6 @@
             </td>
           </tr>
         </tbody>
-        <tfoot v-if="filtered.length">
-          <tr>
-            <td colspan="4" class="ps-3 text-end fw-semibold">Total Stock Value</td>
-            <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
-            <td colspan="2"></td>
-          </tr>
-        </tfoot>
         </table>
       </div>
 
@@ -73,7 +66,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span class="fw-semibold">Total Stock Value:</span>
+          <span class="figure fw-semibold">{{ formatMoney(grandTotal) }}</span>
+        </template>
+      </PaginationBar>
 
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-box-seam"></i>

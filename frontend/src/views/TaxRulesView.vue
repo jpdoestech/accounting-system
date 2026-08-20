@@ -23,15 +23,15 @@
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 data-grid data-grid--tax-rules">
         <colgroup>
-          <col style="width: 14%" />
-          <col style="width: 24%" />
+          <col style="width: 13%" />
+          <col style="width: 25%" />
           <col style="width: 12%" />
           <col style="width: 10%" />
           <col style="width: 18%" />
           <col style="width: 10%" />
-          <col style="width: 160px" />
+          <col style="width: 12%" />
         </colgroup>
         <thead>
           <tr>

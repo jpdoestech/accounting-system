@@ -18,14 +18,14 @@
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 data-grid data-grid--bank-accounts">
         <colgroup>
           <col style="width: 22%" />
+          <col style="width: 22%" />
           <col style="width: 20%" />
-          <col style="width: 18%" />
           <col style="width: 16%" />
           <col style="width: 10%" />
-          <col style="width: 130px" />
+          <col style="width: 10%" />
         </colgroup>
         <thead>
           <tr>
@@ -55,13 +55,6 @@
             </td>
           </tr>
         </tbody>
-        <tfoot v-if="filtered.length">
-          <tr>
-            <td colspan="3" class="ps-3 text-end fw-semibold">Total Opening Balance</td>
-            <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
-            <td colspan="2"></td>
-          </tr>
-        </tfoot>
         </table>
       </div>
 
@@ -70,7 +63,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span class="fw-semibold">Total Opening Balance:</span>
+          <span class="figure fw-semibold">{{ formatMoney(grandTotal) }}</span>
+        </template>
+      </PaginationBar>
 
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-bank"></i>

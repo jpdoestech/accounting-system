@@ -23,12 +23,12 @@ if not exist "%ROOT%\frontend\node_modules" (
 )
 
 echo Starting backend (FastAPI) on http://localhost:8000 ...
-start "Philippine Accounting System - Backend" cmd /k ^
-    "cd /d "%ROOT%\backend" && call .venv\Scripts\activate.bat && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+start "Philippine Accounting System - Backend" /D "%ROOT%\backend" cmd /k ^
+    "call .venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 
 echo Starting frontend (Vite) on http://localhost:5173 ...
-start "Philippine Accounting System - Frontend" cmd /k ^
-    "cd /d "%ROOT%\frontend" && npm run dev"
+start "Philippine Accounting System - Frontend" /D "%ROOT%\frontend" cmd /k ^
+    "npm run dev"
 
 echo.
 echo Both servers are starting in separate windows.
