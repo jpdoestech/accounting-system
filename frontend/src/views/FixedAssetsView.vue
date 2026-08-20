@@ -5,9 +5,15 @@
         <span class="eyebrow">Fixed Assets · Master data</span>
         <h4 class="mb-0">Fixed Assets</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New asset
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search code, name…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New asset
+        </button>
+      </div>
     </div>
 
     <div v-if="depreciateError" class="alert alert-danger py-2 small">{{ depreciateError }}</div>
@@ -15,6 +21,15 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+        <colgroup>
+          <col style="width: 14%" />
+          <col style="width: 26%" />
+          <col style="width: 13%" />
+          <col style="width: 13%" />
+          <col style="width: 14%" />
+          <col style="width: 10%" />
+          <col style="width: 190px" />
+        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">Code</th>
@@ -29,12 +44,10 @@
         <tbody>
           <tr v-for="a in pagedItems" :key="a.id">
             <td class="ps-3 figure text-muted">{{ a.asset_code }}</td>
-            <td class="fw-medium">{{ a.name }}</td>
-            <td class="text-end figure">{{ a.acquisition_cost }}</td>
-            <td class="text-end figure">{{ a.accumulated_depreciation }}</td>
-            <td class="text-end figure">
-              {{ (Number(a.acquisition_cost) - Number(a.accumulated_depreciation)).toFixed(2) }}
-            </td>
+            <td class="fw-medium text-truncate">{{ a.name }}</td>
+            <td class="text-end figure">{{ formatMoney(a.acquisition_cost) }}</td>
+            <td class="text-end figure">{{ formatMoney(a.accumulated_depreciation) }}</td>
+            <td class="text-end figure">{{ formatMoney(bookValue(a)) }}</td>
             <td>
               <span class="badge-pill" :class="a.status === 'Active' ? 'badge-pill--green' : 'badge-pill--muted'">
                 {{ a.status }}
@@ -54,11 +67,20 @@
             </td>
           </tr>
         </tbody>
+        <tfoot v-if="filtered.length">
+          <tr>
+            <td colspan="2" class="ps-3 text-end fw-semibold">Totals</td>
+            <td class="text-end figure fw-semibold">{{ formatMoney(totals.cost) }}</td>
+            <td class="text-end figure fw-semibold">{{ formatMoney(totals.dep) }}</td>
+            <td class="text-end figure fw-semibold">{{ formatMoney(totals.book) }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
         </table>
       </div>
 
       <PaginationBar
-        v-if="items.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -67,6 +89,10 @@
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-building"></i>
         No fixed assets yet. Add one to start tracking depreciation.
+      </div>
+      <div v-else-if="!loading && items.length && !filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No assets match "{{ search }}".
       </div>
     </div>
 
@@ -84,17 +110,29 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, ref, computed } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
 import EntityFormModal from "../components/EntityFormModal.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import { useCrudResource } from "../composables/useCrudResource";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
+import { formatMoney } from "../utils/format";
 
 const businessStore = useBusinessStore();
 const { items, loading, create, update, load } = useCrudResource("/fixed-assets");
-const { page, pageSize, pagedItems, totalItems } = usePagination(items);
+const { query: search, filtered } = useTextFilter(items, (a) => [a.asset_code, a.name]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
+
+function bookValue(asset) {
+  return Number(asset.acquisition_cost || 0) - Number(asset.accumulated_depreciation || 0);
+}
+const totals = computed(() => {
+  const cost = filtered.value.reduce((sum, a) => sum + Number(a.acquisition_cost || 0), 0);
+  const dep = filtered.value.reduce((sum, a) => sum + Number(a.accumulated_depreciation || 0), 0);
+  return { cost, dep, book: cost - dep };
+});
 
 // acquisition_cost, salvage_value, useful_life_months, and
 // acquisition_date all feed the depreciation schedule -- the backend

@@ -19,6 +19,13 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+        <colgroup>
+          <col style="width: 15%" />
+          <col style="width: 33%" />
+          <col style="width: 18%" />
+          <col style="width: 14%" />
+          <col style="width: 190px" />
+        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">Code</th>

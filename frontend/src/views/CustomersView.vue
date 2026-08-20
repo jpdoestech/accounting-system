@@ -19,6 +19,13 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+        <colgroup>
+          <col style="width: 26%" />
+          <col style="width: 18%" />
+          <col style="width: 26%" />
+          <col style="width: 16%" />
+          <col style="width: 130px" />
+        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">Name</th>

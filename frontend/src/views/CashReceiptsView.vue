@@ -5,9 +5,15 @@
         <span class="eyebrow">Banking</span>
         <h4 class="mb-0">Cash Receipts</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New Receipt
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search no., customer…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New Receipt
+        </button>
+      </div>
     </div>
 
     <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
@@ -15,8 +21,18 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+          <colgroup>
+            <col style="width: 32px" />
+            <col style="width: 15%" />
+            <col style="width: 12%" />
+            <col style="width: 26%" />
+            <col style="width: 14%" />
+            <col style="width: 11%" />
+            <col style="width: 130px" />
+          </colgroup>
           <thead>
             <tr>
+              <th></th>
               <th class="ps-3">No.</th>
               <th>Date</th>
               <th>Customer</th>
@@ -26,32 +42,58 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in pagedItems" :key="r.id">
-              <td class="ps-3 fw-medium">{{ r.receipt_number }}</td>
-              <td class="text-muted small">{{ r.receipt_date }}</td>
-              <td class="text-muted">{{ customerName(r.customer_id) }}</td>
-              <td class="text-end figure">{{ r.amount }}</td>
-              <td>
-                <span class="badge-pill" :class="r.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
-                  {{ r.status }}
-                </span>
-              </td>
-              <td class="table-actions pe-3">
-                <span v-if="r.status === 'Draft'" class="row-action-links">
-                  <button class="row-action-link" @click="openEdit(r.id)">Edit</button>
-                  <button class="row-action-link row-action-link--danger" @click="askDelete(r)">Delete</button>
-                  <button class="row-action-link" :disabled="postingId === r.id" @click="onPost(r.id)">
-                    Post
-                  </button>
-                </span>
-              </td>
-            </tr>
+            <template v-for="r in pagedItems" :key="r.id">
+              <tr class="row-expandable" @click="toggleExpand(r.id, r)">
+                <td class="text-center text-muted">
+                  <i class="bi" :class="expandedId === r.id ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                </td>
+                <td class="ps-3 fw-medium">{{ r.receipt_number }}</td>
+                <td class="text-muted small">{{ r.receipt_date }}</td>
+                <td class="text-muted text-truncate">{{ customerName(r.customer_id) }}</td>
+                <td class="text-end figure">{{ formatMoney(r.amount) }}</td>
+                <td>
+                  <span class="badge-pill" :class="r.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
+                    {{ r.status }}
+                  </span>
+                </td>
+                <td class="table-actions pe-3" @click.stop>
+                  <span v-if="r.status === 'Draft'" class="row-action-links">
+                    <button class="row-action-link" @click="openEdit(r.id)">Edit</button>
+                    <button class="row-action-link row-action-link--danger" @click="askDelete(r)">Delete</button>
+                    <button class="row-action-link" :disabled="postingId === r.id" @click="onPost(r.id)">
+                      Post
+                    </button>
+                  </span>
+                </td>
+              </tr>
+              <tr v-if="expandedId === r.id" class="row-detail">
+                <td colspan="7" class="row-detail__inner">
+                  <div class="small">
+                    <span class="text-muted">Bank account:</span> {{ bankAccountName(r.bank_account_id) }}
+                  </div>
+                  <div v-if="r.allocations?.length" class="small mt-1">
+                    <span class="text-muted">Applied to:</span>
+                    <span v-for="(a, i) in r.allocations" :key="i">
+                      {{ invoiceNumber(a.sales_invoice_id) }} ({{ formatMoney(a.amount_applied) }})<span v-if="i < r.allocations.length - 1">, </span>
+                    </span>
+                  </div>
+                  <div v-else class="small text-muted mt-1">Not applied to any invoice (unapplied receipt).</div>
+                </td>
+              </tr>
+            </template>
           </tbody>
+          <tfoot v-if="filtered.length">
+            <tr>
+              <td colspan="3" class="ps-3 text-end fw-semibold">Grand Total (all filtered receipts)</td>
+              <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
       <PaginationBar
-        v-if="receipts.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -60,6 +102,10 @@
       <div v-if="!receipts.length" class="empty-state">
         <i class="bi bi-cash-coin"></i>
         No receipts yet. Click "New Receipt" to record money coming in.
+      </div>
+      <div v-else-if="!filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No receipts match "{{ search }}".
       </div>
     </div>
 
@@ -138,10 +184,11 @@ import PaginationBar from "../components/PaginationBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import FormModal from "../components/FormModal.vue";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
+import { formatMoney } from "../utils/format";
 
 const businessStore = useBusinessStore();
 const receipts = ref([]);
-const { page, pageSize, pagedItems, totalItems } = usePagination(receipts);
 const bankAccounts = ref([]);
 const customers = ref([]);
 const invoices = ref([]);
@@ -159,6 +206,27 @@ const unpaidInvoices = computed(() => invoices.value.filter((i) => i.status === 
 
 function customerName(id) {
   return customers.value.find((c) => c.id === id)?.name || "—";
+}
+function bankAccountName(id) {
+  return bankAccounts.value.find((b) => b.id === id)?.name || "—";
+}
+function invoiceNumber(id) {
+  return invoices.value.find((i) => i.id === id)?.invoice_number || "—";
+}
+
+const { query: search, filtered } = useTextFilter(receipts, (r) => [
+  r.receipt_number,
+  r.receipt_date,
+  customerName(r.customer_id),
+  r.status,
+]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
+
+const grandTotal = computed(() => filtered.value.reduce((sum, r) => sum + Number(r.amount || 0), 0));
+
+const expandedId = ref(null);
+function toggleExpand(receiptId) {
+  expandedId.value = expandedId.value === receiptId ? null : receiptId;
 }
 
 function blankForm() {
@@ -288,3 +356,17 @@ async function confirmDelete() {
 
 onMounted(loadAll);
 </script>
+
+<style scoped>
+.row-expandable {
+  cursor: pointer;
+}
+
+.row-detail td {
+  background: #fafbfc;
+}
+
+.row-detail__inner {
+  padding: 0.6rem 1rem 0.75rem 2.5rem !important;
+}
+</style>

@@ -5,14 +5,28 @@
         <span class="eyebrow">Banking · Master data</span>
         <h4 class="mb-0">Bank Accounts</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New bank account
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search name, bank, account no.…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New bank account
+        </button>
+      </div>
     </div>
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+        <colgroup>
+          <col style="width: 22%" />
+          <col style="width: 20%" />
+          <col style="width: 18%" />
+          <col style="width: 16%" />
+          <col style="width: 10%" />
+          <col style="width: 130px" />
+        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">Name</th>
@@ -25,10 +39,10 @@
         </thead>
         <tbody>
           <tr v-for="b in pagedItems" :key="b.id">
-            <td class="ps-3 fw-medium">{{ b.name }}</td>
-            <td class="text-muted">{{ b.bank_name || "—" }}</td>
+            <td class="ps-3 fw-medium text-truncate">{{ b.name }}</td>
+            <td class="text-muted text-truncate">{{ b.bank_name || "—" }}</td>
             <td class="figure text-muted">{{ b.account_number || "—" }}</td>
-            <td class="text-end figure">{{ b.opening_balance }}</td>
+            <td class="text-end figure">{{ formatMoney(b.opening_balance) }}</td>
             <td>
               <span class="badge-pill" :class="b.is_active === false ? 'badge-pill--muted' : 'badge-pill--green'">
                 {{ b.is_active === false ? "Inactive" : "Active" }}
@@ -41,11 +55,18 @@
             </td>
           </tr>
         </tbody>
+        <tfoot v-if="filtered.length">
+          <tr>
+            <td colspan="3" class="ps-3 text-end fw-semibold">Total Opening Balance</td>
+            <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
         </table>
       </div>
 
       <PaginationBar
-        v-if="items.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -54,6 +75,10 @@
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-bank"></i>
         No bank accounts yet. Add one to record cash receipts and payments.
+      </div>
+      <div v-else-if="!loading && items.length && !filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No bank accounts match "{{ search }}".
       </div>
     </div>
 
@@ -71,17 +96,21 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, ref, computed } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
 import EntityFormModal from "../components/EntityFormModal.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import { useCrudResource } from "../composables/useCrudResource";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
+import { formatMoney } from "../utils/format";
 
 const businessStore = useBusinessStore();
 const { items, loading, create, update } = useCrudResource("/bank-accounts");
-const { page, pageSize, pagedItems, totalItems } = usePagination(items);
+const { query: search, filtered } = useTextFilter(items, (b) => [b.name, b.bank_name, b.account_number]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
+const grandTotal = computed(() => filtered.value.reduce((sum, b) => sum + Number(b.opening_balance || 0), 0));
 const glAccounts = ref([]);
 
 // gl_account_id, opening_balance, and opening_balance_date are only

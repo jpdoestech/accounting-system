@@ -5,14 +5,29 @@
         <span class="eyebrow">Inventory · Master data</span>
         <h4 class="mb-0">Inventory Items</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New item
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search SKU, name…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New item
+        </button>
+      </div>
     </div>
 
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+        <colgroup>
+          <col style="width: 14%" />
+          <col style="width: 26%" />
+          <col style="width: 13%" />
+          <col style="width: 13%" />
+          <col style="width: 14%" />
+          <col style="width: 10%" />
+          <col style="width: 130px" />
+        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">SKU</th>
@@ -27,12 +42,10 @@
         <tbody>
           <tr v-for="item in pagedItems" :key="item.id">
             <td class="ps-3 figure text-muted">{{ item.sku }}</td>
-            <td class="fw-medium">{{ item.name }}</td>
-            <td class="text-end figure">{{ item.quantity_on_hand }}</td>
-            <td class="text-end figure">{{ item.average_cost }}</td>
-            <td class="text-end figure">
-              {{ (Number(item.quantity_on_hand) * Number(item.average_cost)).toFixed(2) }}
-            </td>
+            <td class="fw-medium text-truncate">{{ item.name }}</td>
+            <td class="text-end figure">{{ formatNumber(item.quantity_on_hand) }}</td>
+            <td class="text-end figure">{{ formatMoney(item.average_cost) }}</td>
+            <td class="text-end figure">{{ formatMoney(stockValue(item)) }}</td>
             <td>
               <span class="badge-pill" :class="item.is_active === false ? 'badge-pill--muted' : 'badge-pill--green'">
                 {{ item.is_active === false ? "Inactive" : "Active" }}
@@ -45,11 +58,18 @@
             </td>
           </tr>
         </tbody>
+        <tfoot v-if="filtered.length">
+          <tr>
+            <td colspan="4" class="ps-3 text-end fw-semibold">Total Stock Value</td>
+            <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
         </table>
       </div>
 
       <PaginationBar
-        v-if="items.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -58,6 +78,10 @@
       <div v-if="!loading && !items.length" class="empty-state">
         <i class="bi bi-box-seam"></i>
         No inventory items yet. Add one to track stock on sales and purchases.
+      </div>
+      <div v-else-if="!loading && items.length && !filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No items match "{{ search }}".
       </div>
     </div>
 
@@ -75,17 +99,25 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, ref, computed } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
 import EntityFormModal from "../components/EntityFormModal.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import { useCrudResource } from "../composables/useCrudResource";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
+import { formatMoney, formatNumber } from "../utils/format";
 
 const businessStore = useBusinessStore();
 const { items, loading, create, update } = useCrudResource("/inventory-items");
-const { page, pageSize, pagedItems, totalItems } = usePagination(items);
+const { query: search, filtered } = useTextFilter(items, (i) => [i.sku, i.name]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
+
+function stockValue(item) {
+  return Number(item.quantity_on_hand || 0) * Number(item.average_cost || 0);
+}
+const grandTotal = computed(() => filtered.value.reduce((sum, item) => sum + stockValue(item), 0));
 
 const createFields = [
   { key: "sku", label: "SKU", required: true, colClass: "col-md-4" },

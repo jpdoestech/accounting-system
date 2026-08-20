@@ -5,9 +5,15 @@
         <span class="eyebrow">Accounting · Master data</span>
         <h4 class="mb-0">Tax Rules</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New rule
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search code, name…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New rule
+        </button>
+      </div>
     </div>
     <p class="text-muted small">
       Rules are effective-dated — a transaction always uses the rate in force on its own date, even
@@ -18,6 +24,15 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+        <colgroup>
+          <col style="width: 14%" />
+          <col style="width: 24%" />
+          <col style="width: 12%" />
+          <col style="width: 10%" />
+          <col style="width: 18%" />
+          <col style="width: 10%" />
+          <col style="width: 160px" />
+        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">Code</th>
@@ -62,7 +77,7 @@
       </div>
 
       <PaginationBar
-        v-if="rules.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -71,6 +86,10 @@
       <div v-if="!loading && !rules.length" class="empty-state">
         <i class="bi bi-percent"></i>
         No tax rules yet. Add one to apply VAT or withholding tax to invoices and bills.
+      </div>
+      <div v-else-if="!loading && rules.length && !filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No rules match "{{ search }}".
       </div>
     </div>
 
@@ -94,11 +113,13 @@ import { useBusinessStore } from "../stores/business";
 import EntityFormModal from "../components/EntityFormModal.vue";
 import PaginationBar from "../components/PaginationBar.vue";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
 
 const businessStore = useBusinessStore();
 const rules = ref([]);
 const loading = ref(true);
-const { page, pageSize, pagedItems, totalItems } = usePagination(rules);
+const { query: search, filtered } = useTextFilter(rules, (r) => [r.rule_code, r.name, r.atc_code, r.tax_type]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
 
 const showForm = ref(false);
 const editingId = ref(null);

@@ -5,9 +5,15 @@
         <span class="eyebrow">Purchases</span>
         <h4 class="mb-0">Purchase Bills</h4>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openCreate">
-        <i class="bi bi-plus-lg"></i> New Bill
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box">
+          <i class="bi bi-search"></i>
+          <input v-model="search" type="text" class="form-control form-control-sm" placeholder="Search no., vendor, description…" />
+        </div>
+        <button class="btn btn-primary btn-sm" @click="openCreate">
+          <i class="bi bi-plus-lg"></i> New Bill
+        </button>
+      </div>
     </div>
 
     <div v-if="postError" class="alert alert-danger py-2 small">{{ postError }}</div>
@@ -15,8 +21,18 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0">
+          <colgroup>
+            <col style="width: 32px" />
+            <col style="width: 13%" />
+            <col style="width: 11%" />
+            <col style="width: 24%" />
+            <col style="width: 13%" />
+            <col style="width: 11%" />
+            <col style="width: 130px" />
+          </colgroup>
           <thead>
             <tr>
+              <th></th>
               <th class="ps-3">No.</th>
               <th>Date</th>
               <th>Vendor</th>
@@ -26,32 +42,77 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="bill in pagedItems" :key="bill.id">
-              <td class="ps-3 fw-medium">{{ bill.bill_number }}</td>
-              <td class="text-muted small">{{ bill.bill_date }}</td>
-              <td class="text-muted">{{ vendorName(bill.vendor_id) }}</td>
-              <td class="text-end figure">{{ bill.amount_due_to_vendor }}</td>
-              <td>
-                <span class="badge-pill" :class="bill.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
-                  {{ bill.status }}
-                </span>
-              </td>
-              <td class="table-actions pe-3">
-                <span v-if="bill.status === 'Draft'" class="row-action-links">
-                  <button class="row-action-link" @click="openEdit(bill.id)">Edit</button>
-                  <button class="row-action-link row-action-link--danger" @click="askDelete(bill)">Delete</button>
-                  <button class="row-action-link" :disabled="postingId === bill.id" @click="onPost(bill.id)">
-                    Post
-                  </button>
-                </span>
-              </td>
-            </tr>
+            <template v-for="bill in pagedItems" :key="bill.id">
+              <tr class="row-expandable" @click="toggleExpand(bill.id)">
+                <td class="text-center text-muted">
+                  <i class="bi" :class="expandedId === bill.id ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                </td>
+                <td class="ps-3 fw-medium">{{ bill.bill_number }}</td>
+                <td class="text-muted small">{{ bill.bill_date }}</td>
+                <td class="text-muted text-truncate">{{ vendorName(bill.vendor_id) }}</td>
+                <td class="text-end figure">{{ formatMoney(bill.amount_due_to_vendor) }}</td>
+                <td>
+                  <span class="badge-pill" :class="bill.status === 'Posted' ? 'badge-pill--green' : 'badge-pill--muted'">
+                    {{ bill.status }}
+                  </span>
+                </td>
+                <td class="table-actions pe-3" @click.stop>
+                  <span v-if="bill.status === 'Draft'" class="row-action-links">
+                    <button class="row-action-link" @click="openEdit(bill.id)">Edit</button>
+                    <button class="row-action-link row-action-link--danger" @click="askDelete(bill)">Delete</button>
+                    <button class="row-action-link" :disabled="postingId === bill.id" @click="onPost(bill.id)">
+                      Post
+                    </button>
+                  </span>
+                </td>
+              </tr>
+              <tr v-if="expandedId === bill.id" class="row-detail">
+                <td colspan="7" class="p-0">
+                  <div class="row-detail__inner">
+                    <div v-if="loadingDetail" class="text-muted small py-2">Loading lines…</div>
+                    <table v-else class="table table-sm mb-0 row-detail__table">
+                      <thead>
+                        <tr>
+                          <th>Description</th>
+                          <th>Account</th>
+                          <th>Item</th>
+                          <th class="text-end">Qty</th>
+                          <th class="text-end">Unit Price</th>
+                          <th>VAT</th>
+                          <th>W/T</th>
+                          <th class="text-end">Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(line, i) in detailLines" :key="i">
+                          <td>{{ line.description }}</td>
+                          <td class="text-muted">{{ accountLabel(line.expense_account_id) }}</td>
+                          <td class="text-muted">{{ itemLabel(line.item_id) }}</td>
+                          <td class="text-end figure">{{ formatNumber(line.quantity) }}</td>
+                          <td class="text-end figure">{{ formatMoney(line.unit_price) }}</td>
+                          <td class="text-muted">{{ line.tax_rule_code || "—" }}</td>
+                          <td class="text-muted">{{ line.withholding_tax_rule_code || "—" }}</td>
+                          <td class="text-end figure">{{ formatMoney(line.line_amount) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
+          <tfoot v-if="filtered.length">
+            <tr>
+              <td colspan="4" class="ps-3 text-end fw-semibold">Grand Total (all filtered bills)</td>
+              <td class="text-end figure fw-semibold">{{ formatMoney(grandTotal) }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
       <PaginationBar
-        v-if="bills.length"
+        v-if="filtered.length"
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
@@ -60,6 +121,10 @@
       <div v-if="!bills.length" class="empty-state">
         <i class="bi bi-file-earmark-text"></i>
         No bills yet. Click "New Bill" to record your first purchase.
+      </div>
+      <div v-else-if="!filtered.length" class="empty-state">
+        <i class="bi bi-search"></i>
+        No bills match "{{ search }}".
       </div>
     </div>
 
@@ -164,11 +229,12 @@ import PaginationBar from "../components/PaginationBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import FormModal from "../components/FormModal.vue";
 import { usePagination } from "../composables/usePagination";
+import { useTextFilter } from "../composables/useTextFilter";
 import { useBusinessStore } from "../stores/business";
+import { formatMoney, formatNumber } from "../utils/format";
 
 const businessStore = useBusinessStore();
 const bills = ref([]);
-const { page, pageSize, pagedItems, totalItems } = usePagination(bills);
 const vendors = ref([]);
 const accounts = ref([]);
 const taxRules = ref([]);
@@ -188,6 +254,47 @@ const withholdingRules = computed(() => taxRules.value.filter((r) => r.tax_type 
 
 function vendorName(id) {
   return vendors.value.find((v) => v.id === id)?.name || "—";
+}
+function accountLabel(id) {
+  const a = accounts.value.find((x) => x.id === id);
+  return a ? `${a.code} — ${a.name}` : "—";
+}
+function itemLabel(id) {
+  if (!id) return "—";
+  const it = items.value.find((x) => x.id === id);
+  return it ? `${it.sku} — ${it.name}` : "—";
+}
+
+const { query: search, filtered } = useTextFilter(bills, (bill) => [
+  bill.bill_number,
+  bill.bill_date,
+  vendorName(bill.vendor_id),
+  bill.status,
+]);
+const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
+
+const grandTotal = computed(() =>
+  filtered.value.reduce((sum, bill) => sum + Number(bill.amount_due_to_vendor || 0), 0)
+);
+
+const expandedId = ref(null);
+const detailLines = ref([]);
+const loadingDetail = ref(false);
+
+async function toggleExpand(billId) {
+  if (expandedId.value === billId) {
+    expandedId.value = null;
+    detailLines.value = [];
+    return;
+  }
+  expandedId.value = billId;
+  loadingDetail.value = true;
+  try {
+    const { data } = await api.get(`/businesses/${businessStore.activeBusinessId}/purchase-bills/${billId}`);
+    detailLines.value = data.lines;
+  } finally {
+    loadingDetail.value = false;
+  }
 }
 
 function blankForm() {
@@ -345,3 +452,28 @@ async function confirmDelete() {
 
 onMounted(loadAll);
 </script>
+
+<style scoped>
+.row-expandable {
+  cursor: pointer;
+}
+
+.row-detail td {
+  background: #fafbfc;
+}
+
+.row-detail__inner {
+  padding: 0.5rem 1rem 0.75rem 2.5rem;
+}
+
+.row-detail__table {
+  background: transparent;
+}
+
+.row-detail__table thead th {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+</style>
