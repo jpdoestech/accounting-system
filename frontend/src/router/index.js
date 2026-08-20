@@ -51,9 +51,13 @@ const routes = [
         props: true,
       },
       {
+        path: "journal-entries",
+        name: "journal-entries",
+        component: () => import("../views/JournalEntriesView.vue"),
+      },
+      {
         path: "journal-entries/new",
-        name: "journal-entry-new",
-        component: () => import("../views/JournalEntryFormView.vue"),
+        redirect: { name: "journal-entries" },
       },
       {
         path: "reports/trial-balance",

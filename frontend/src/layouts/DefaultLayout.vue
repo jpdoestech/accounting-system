@@ -18,8 +18,8 @@
         <router-link to="/fiscal-periods" class="app-sidebar__link">
           <i class="bi bi-calendar3"></i> Fiscal Periods
         </router-link>
-        <router-link to="/journal-entries/new" class="app-sidebar__link">
-          <i class="bi bi-pencil-square"></i> New Journal Entry
+        <router-link to="/journal-entries" class="app-sidebar__link">
+          <i class="bi bi-journal-text"></i> Journal Entries
         </router-link>
         <router-link to="/reports/trial-balance" class="app-sidebar__link">
           <i class="bi bi-clipboard-data"></i> Trial Balance

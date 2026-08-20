@@ -373,15 +373,35 @@ a:hover {
 .data-grid > tbody > tr {
   display: grid;
   grid-template-columns: var(--grid-columns);
-  align-items: center;
+  align-items: stretch;
 }
 
+/* align-items:stretch above makes every cell in a row share the same
+   full height (so the border-bottom Bootstrap draws on each <td>
+   lines up across the row) -- without this, a cell holding a badge
+   or action buttons renders taller than a plain-text cell next to it,
+   and each cell's border ends up at a different vertical position,
+   which is exactly the "inconsistent row lines" bug. Cells then use
+   flex individually to re-center their own content vertically now
+   that they're stretched to the full row height. */
 .data-grid > thead > tr > th,
 .data-grid > tbody > tr > td {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.data-grid > thead > tr > th.text-end,
+.data-grid > tbody > tr > td.text-end {
+  justify-content: flex-end;
+}
+
+.data-grid > thead > tr > th.text-center,
+.data-grid > tbody > tr > td.text-center {
+  justify-content: center;
 }
 
 .data-grid > tbody > .row-detail,
@@ -394,8 +414,29 @@ a:hover {
   display: block;
 }
 
+/* HTML colspan is a table-layout concept and CSS Grid ignores it
+   completely -- without this, a lone "No data yet" <td colspan="N">
+   row would get squeezed into just the first (often narrow) grid
+   column with its text clipped by the ellipsis rule above, instead
+   of spanning the full row like it visually should. */
+.data-grid > tbody > tr > td[colspan] {
+  grid-column: 1 / -1;
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .data-grid--trial-balance {
   --grid-columns: 14% 46% 20% 20%;
+}
+
+.data-grid--account-ledger {
+  --grid-columns: 14% 40% 15% 15% 16%;
+}
+
+.data-grid--journal-entries {
+  --grid-columns: 3% 12% 15% 30% 12% 12% 16%;
 }
 
 .data-grid--tax-rules {

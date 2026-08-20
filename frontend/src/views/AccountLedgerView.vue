@@ -15,7 +15,7 @@
 
     <div class="view-scroll-area">
       <div class="table-scroll">
-        <table class="table table-sm bg-white">
+        <table class="table table-sm bg-white data-grid data-grid--account-ledger">
           <colgroup>
             <col style="width: 14%" />
             <col style="width: 40%" />
