@@ -51,6 +51,12 @@
             <td class="table-actions pe-3">
               <span class="row-action-links">
                 <button class="row-action-link" @click="openEdit(b)">Edit</button>
+                <router-link
+                  class="row-action-link"
+                  :to="{ name: 'bank-reconciliation', params: { bankAccountId: b.id } }"
+                >
+                  Reconcile
+                </router-link>
               </span>
             </td>
           </tr>

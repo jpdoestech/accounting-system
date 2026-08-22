@@ -54,6 +54,12 @@
             <td class="table-actions pe-3">
               <span class="row-action-links">
                 <button class="row-action-link" @click="openEdit(item)">Edit</button>
+                <router-link
+                  class="row-action-link"
+                  :to="{ name: 'inventory-movements', params: { itemId: item.id } }"
+                >
+                  History
+                </router-link>
               </span>
             </td>
           </tr>

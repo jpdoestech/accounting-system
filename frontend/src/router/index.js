@@ -95,6 +95,12 @@ const routes = [
         component: () => import("../views/BankAccountsView.vue"),
       },
       {
+        path: "bank-accounts/:bankAccountId/reconcile",
+        name: "bank-reconciliation",
+        component: () => import("../views/BankReconciliationView.vue"),
+        props: true,
+      },
+      {
         path: "cash-receipts",
         name: "cash-receipts",
         component: () => import("../views/CashReceiptsView.vue"),
@@ -115,9 +121,21 @@ const routes = [
         component: () => import("../views/InventoryItemsView.vue"),
       },
       {
+        path: "inventory-items/:itemId/movements",
+        name: "inventory-movements",
+        component: () => import("../views/InventoryStockMovementsView.vue"),
+        props: true,
+      },
+      {
         path: "fixed-assets",
         name: "fixed-assets",
         component: () => import("../views/FixedAssetsView.vue"),
+      },
+      {
+        path: "fixed-assets/:assetId/schedule",
+        name: "fixed-asset-schedule",
+        component: () => import("../views/FixedAssetDepreciationScheduleView.vue"),
+        props: true,
       },
       {
         path: "financial-statements",

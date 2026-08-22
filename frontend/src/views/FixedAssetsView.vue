@@ -56,6 +56,12 @@
             <td class="table-actions pe-3">
               <span class="row-action-links">
                 <button class="row-action-link" @click="openEdit(a)">Edit</button>
+                <router-link
+                  class="row-action-link"
+                  :to="{ name: 'fixed-asset-schedule', params: { assetId: a.id } }"
+                >
+                  Schedule
+                </router-link>
                 <button
                   class="row-action-link"
                   :disabled="a.status !== 'Active' || depreciatingId === a.id"
