@@ -375,30 +375,39 @@ a:hover {
   box-shadow: 0 -1px 0 var(--border);
 }
 
+/* IMPORTANT: this must be ONE shared grid across the whole table, not
+   a separate grid per row. An earlier version gave each <tr> its own
+   `display: grid`, which made every row its own tiny containing
+   block -- and position:sticky on a header cell is constrained to
+   stick only within ITS OWN containing block. With each row only
+   ~27px tall, there was nowhere for the header to actually stick to,
+   so it just scrolled away like a normal element (verified directly
+   in a real browser: scrolling the table by 136px moved the header
+   by exactly 136px too -- sticky was doing nothing at all).
+   display:contents on thead/tbody/tr removes their own boxes and
+   promotes every <th>/<td> to be a flat item of ONE grid defined
+   here, so the header cells share the same scrolling containing
+   block as the body cells and position:sticky actually has room to
+   work. */
 .data-grid {
-  display: block;
-}
-
-.data-grid > thead,
-.data-grid > tbody {
-  display: block;
-}
-
-.data-grid > thead > tr,
-.data-grid > tbody > tr {
   display: grid;
   grid-template-columns: var(--grid-columns);
   align-items: stretch;
 }
 
-/* align-items:stretch above makes every cell in a row share the same
-   full height (so the border-bottom Bootstrap draws on each <td>
-   lines up across the row) -- without this, a cell holding a badge
-   or action buttons renders taller than a plain-text cell next to it,
-   and each cell's border ends up at a different vertical position,
-   which is exactly the "inconsistent row lines" bug. Cells then use
-   flex individually to re-center their own content vertically now
-   that they're stretched to the full row height. */
+.data-grid > thead,
+.data-grid > tbody,
+.data-grid > thead > tr,
+.data-grid > tbody > tr {
+  display: contents;
+}
+
+/* display:contents removes the <tr>'s own box, so it can no longer be
+   painted directly -- hover/background has to target the cells. */
+.data-grid.table-hover > tbody > tr:hover > td {
+  background: var(--blue-tint);
+}
+
 .data-grid > thead > tr > th,
 .data-grid > tbody > tr > td {
   min-width: 0;
@@ -421,11 +430,12 @@ a:hover {
 
 .data-grid > tbody > .row-detail,
 .data-grid > tbody > .invoice-detail-row {
-  display: block;
+  display: contents;
 }
 
 .data-grid > tbody > .row-detail > td,
 .data-grid > tbody > .invoice-detail-row > td {
+  grid-column: 1 / -1;
   display: block;
 }
 
