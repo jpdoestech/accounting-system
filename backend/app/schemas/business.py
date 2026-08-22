@@ -41,6 +41,7 @@ class BusinessSettingsUpdate(BaseModel):
     ap_account_id: str | None = None
     input_vat_account_id: str | None = None
     withholding_tax_payable_account_id: str | None = None
+    opening_balance_equity_account_id: str | None = None
 
 
 class BusinessSettingsRead(BaseModel):
@@ -56,3 +57,4 @@ class BusinessSettingsRead(BaseModel):
     ap_account_id: str | None = None
     input_vat_account_id: str | None = None
     withholding_tax_payable_account_id: str | None = None
+    opening_balance_equity_account_id: str | None = None

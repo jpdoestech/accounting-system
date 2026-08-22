@@ -14,6 +14,77 @@ def _register_and_login(client, email="banking@example.com", password="s3cret-pa
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_bank_account_opening_balance_auto_posts_when_configured(client):
+    headers = _register_and_login(client, email="opening-balance@example.com")
+    business_id = client.post(
+        "/api/v1/businesses", headers=headers, json={"registered_name": "Opening Balance Co"}
+    ).json()["id"]
+    cash_gl = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "1000", "name": "Cash", "account_type": "Asset"},
+    ).json()
+    equity = client.post(
+        f"/api/v1/businesses/{business_id}/accounts",
+        headers=headers,
+        json={"code": "3900", "name": "Opening Balance Equity", "account_type": "Equity"},
+    ).json()
+    fy = client.post(
+        f"/api/v1/businesses/{business_id}/fiscal-years",
+        headers=headers,
+        json={"name": "FY2026", "start_date": "2026-01-01", "end_date": "2026-12-31"},
+    ).json()
+    client.post(
+        f"/api/v1/businesses/{business_id}/periods",
+        headers=headers,
+        json={"fiscal_year_id": fy["id"], "name": "Jan", "start_date": "2026-01-01", "end_date": "2026-01-31"},
+    )
+
+    # No opening_balance_equity_account_id configured yet -- bank account
+    # is still created, but nothing gets posted to the ledger.
+    client.post(
+        f"/api/v1/businesses/{business_id}/bank-accounts",
+        headers=headers,
+        json={"name": "Unconfigured", "gl_account_id": cash_gl["id"], "opening_balance": "1000.00", "opening_balance_date": "2026-01-01"},
+    )
+    assert client.get(f"/api/v1/businesses/{business_id}/journal-entries", headers=headers).json() == []
+
+    # Once configured, a new bank account's opening balance auto-posts.
+    client.patch(
+        f"/api/v1/businesses/{business_id}/settings",
+        headers=headers,
+        json={"opening_balance_equity_account_id": equity["id"]},
+    )
+    client.post(
+        f"/api/v1/businesses/{business_id}/bank-accounts",
+        headers=headers,
+        json={"name": "Main Bank", "gl_account_id": cash_gl["id"], "opening_balance": "5000.00", "opening_balance_date": "2026-01-15"},
+    )
+    entries = client.get(f"/api/v1/businesses/{business_id}/journal-entries", headers=headers).json()
+    assert len(entries) == 1
+    assert entries[0]["source"] == "Bank Account Opening Balance"
+    lines_by_account = {l["account_id"]: l for l in entries[0]["lines"]}
+    assert lines_by_account[cash_gl["id"]]["debit"] == "5000.00"
+    assert lines_by_account[equity["id"]]["credit"] == "5000.00"
+
+    bs = client.get(
+        f"/api/v1/businesses/{business_id}/reports/balance-sheet",
+        headers=headers,
+        params={"as_of_date": "2026-01-15"},
+    ).json()
+    cash_line = next(l for l in bs["assets"] if l["account_id"] == cash_gl["id"])
+    assert cash_line["amount"] == "5000.00"
+
+    # A date outside any open period fails gracefully -- the bank
+    # account is still created, it just doesn't get a journal entry.
+    client.post(
+        f"/api/v1/businesses/{business_id}/bank-accounts",
+        headers=headers,
+        json={"name": "Future Bank", "gl_account_id": cash_gl["id"], "opening_balance": "200.00", "opening_balance_date": "2027-01-01"},
+    )
+    assert len(client.get(f"/api/v1/businesses/{business_id}/journal-entries", headers=headers).json()) == 1
+
+
 def test_bank_account_update(client):
     headers = _register_and_login(client, email="bank-edit@example.com")
     business_id = client.post(

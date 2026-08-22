@@ -49,10 +49,11 @@
             <router-link to="/bank-accounts" class="kpi-card__link">View bank accounts</router-link>
             <div v-if="unpostedOpeningBalances" class="kpi-card__note">
               <i class="bi bi-info-circle"></i>
-              Looks low? A bank account's opening balance isn't posted to the ledger
-              automatically — record it with a
-              <router-link to="/journal-entries">journal entry</router-link> (debit the bank's
-              GL account, credit an equity account) to have it count here.
+              Looks low? Bank accounts created before an Opening Balance Equity account was
+              configured don't get posted automatically. Set one in
+              <router-link :to="{ name: 'business-settings', params: { id: businessStore.activeBusinessId } }">Business Settings</router-link>
+              so future accounts post themselves, and record this one manually with a
+              <router-link to="/journal-entries">journal entry</router-link> in the meantime.
             </div>
           </div>
         </div>

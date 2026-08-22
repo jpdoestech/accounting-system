@@ -6,11 +6,12 @@ pattern from sales/purchases (app/api/v1/sales.py, purchases.py).
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.accounting.engine.posting import LineInput, PostingError, post_journal_entry
 from app.auth.dependencies import get_current_user
 from app.db.base import get_db
 from app.models.bank import BankAccount
 from app.models.bank_reconciliation import BankReconciliation
-from app.models.business import Business
+from app.models.business import Business, BusinessSettings
 from app.models.cash_disbursement import CashDisbursement
 from app.models.cash_receipt import CashReceipt
 from app.models.user import User, UserBusinessRole
@@ -71,6 +72,36 @@ def create_bank_account(
     db.add(account)
     db.commit()
     db.refresh(account)
+
+    # Auto-journalize the opening balance so it actually counts in the
+    # GL (and anything derived from it, like the Dashboard's Cash &
+    # Bank figure) instead of just sitting there as an unposted data
+    # field. This is best-effort: if there's no configured opening
+    # balance equity account, or no open period covers the date, the
+    # bank account is still created successfully -- it just won't have
+    # a ledger entry yet, same as if this feature didn't exist. The
+    # user can always post the entry manually afterward.
+    if account.opening_balance and account.opening_balance != 0:
+        settings = db.query(BusinessSettings).filter(BusinessSettings.business_id == business_id).first()
+        if settings and settings.opening_balance_equity_account_id:
+            try:
+                post_journal_entry(
+                    db,
+                    business_id=business_id,
+                    entry_date=account.opening_balance_date or account.created_at.date(),
+                    lines=[
+                        LineInput(account_id=account.gl_account_id, debit=account.opening_balance, credit="0.00",
+                                  description=f"Opening balance: {account.name}"),
+                        LineInput(account_id=settings.opening_balance_equity_account_id, debit="0.00", credit=account.opening_balance,
+                                  description=f"Opening balance: {account.name}"),
+                    ],
+                    memo=f"Opening balance for bank account '{account.name}'",
+                    source="Bank Account Opening Balance",
+                    created_by_user_id=current_user.id,
+                )
+            except PostingError:
+                pass
+
     return account
 
 

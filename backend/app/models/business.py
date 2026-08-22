@@ -64,5 +64,12 @@ class BusinessSettings(UUIDPKMixin, TimestampMixin, Base):
     ap_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id"))
     input_vat_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id"))
     withholding_tax_payable_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id"))
+    # Credited when a bank account's opening balance is auto-journalized
+    # on creation (see create_bank_account in api/v1/banking.py). Left
+    # unconfigured, opening balances are simply recorded as a data
+    # field with no ledger impact -- the bank account still works, it
+    # just won't count toward any GL-derived balance (e.g. the
+    # Dashboard's Cash & Bank figure) until this is set.
+    opening_balance_equity_account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id"))
 
     business: Mapped["Business"] = relationship(back_populates="settings")

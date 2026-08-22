@@ -63,6 +63,19 @@
           <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</option>
         </select>
       </div>
+      <div class="mb-3">
+        <label class="form-label">Opening Balance Equity Account</label>
+        <select v-model="settings.opening_balance_equity_account_id" class="form-select">
+          <option :value="null">— none —</option>
+          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.code }} — {{ a.name }}</option>
+        </select>
+        <div class="form-text">
+          Set this once and any new bank account's opening balance auto-posts to the ledger
+          against this account, instead of just sitting there unrecorded. Existing bank accounts
+          created before this was set won't be posted retroactively — record those manually with
+          a journal entry.
+        </div>
+      </div>
 
       <div v-if="error" class="alert alert-danger py-2 small">{{ error }}</div>
       <div v-if="saved" class="alert alert-success py-2 small">Settings saved.</div>
@@ -91,6 +104,7 @@ const settings = reactive({
   ap_account_id: null,
   input_vat_account_id: null,
   withholding_tax_payable_account_id: null,
+  opening_balance_equity_account_id: null,
 });
 
 const accounts = ref([]);
