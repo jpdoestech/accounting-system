@@ -10,7 +10,7 @@
     </router-link>
   </div>
 
-  <div v-else class="view-root">
+  <div v-else class="view-scroll-page">
     <div class="page-header">
       <div>
         <span class="eyebrow">Overview</span>

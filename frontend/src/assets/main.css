@@ -232,6 +232,21 @@ a:hover {
   overflow: hidden;
 }
 
+/* For pages that AREN'T a single dense list with its own sticky
+   header (reports, dashboards, multi-card layouts) -- .view-root's
+   hidden overflow only works because the list pattern always pairs
+   it with a bounded .view-scroll-area doing the actual scrolling.
+   A page that skips that pairing would have any content past the
+   viewport's edge silently clipped, with no way to scroll to it.
+   Use this instead: it still avoids an extra outer page-scroll on
+   most screens, but falls back to a normal internal scrollbar the
+   moment content doesn't fit, rather than hiding it. */
+.view-scroll-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* Deliberately NOT flex:1 -- a card that force-grows to fill all
    available height leaves a dead blank gap below a short table (e.g.
    3 rows) because the box gets stretched taller than its content

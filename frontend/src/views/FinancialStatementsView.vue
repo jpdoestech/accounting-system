@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="view-scroll-page">
     <h4>Financial Statements</h4>
 
     <div class="row g-4">
@@ -17,11 +17,11 @@
               <tbody>
                 <tr v-for="l in bs.assets" :key="l.account_id">
                   <td>{{ l.account_code }} — {{ l.account_name }}</td>
-                  <td class="text-end">{{ l.amount }}</td>
+                  <td class="text-end figure">{{ formatMoney(l.amount) }}</td>
                 </tr>
                 <tr class="fw-bold border-top">
                   <td>Total Assets</td>
-                  <td class="text-end">{{ bs.total_assets }}</td>
+                  <td class="text-end figure">{{ formatMoney(bs.total_assets) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -31,11 +31,11 @@
               <tbody>
                 <tr v-for="l in bs.liabilities" :key="l.account_id">
                   <td>{{ l.account_code }} — {{ l.account_name }}</td>
-                  <td class="text-end">{{ l.amount }}</td>
+                  <td class="text-end figure">{{ formatMoney(l.amount) }}</td>
                 </tr>
                 <tr class="fw-bold border-top">
                   <td>Total Liabilities</td>
-                  <td class="text-end">{{ bs.total_liabilities }}</td>
+                  <td class="text-end figure">{{ formatMoney(bs.total_liabilities) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -45,19 +45,19 @@
               <tbody>
                 <tr v-for="l in bs.equity" :key="l.account_id">
                   <td>{{ l.account_code }} — {{ l.account_name }}</td>
-                  <td class="text-end">{{ l.amount }}</td>
+                  <td class="text-end figure">{{ formatMoney(l.amount) }}</td>
                 </tr>
                 <tr>
                   <td>Net Income (current)</td>
-                  <td class="text-end">{{ bs.net_income_to_date }}</td>
+                  <td class="text-end figure">{{ formatMoney(bs.net_income_to_date) }}</td>
                 </tr>
                 <tr class="fw-bold border-top">
                   <td>Total Equity</td>
-                  <td class="text-end">{{ bs.total_equity }}</td>
+                  <td class="text-end figure">{{ formatMoney(bs.total_equity) }}</td>
                 </tr>
                 <tr class="fw-bold border-top">
                   <td>Total Liabilities + Equity</td>
-                  <td class="text-end">{{ bs.total_liabilities_and_equity }}</td>
+                  <td class="text-end figure">{{ formatMoney(bs.total_liabilities_and_equity) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -83,14 +83,14 @@
 
           <table v-if="incomeStatement" class="table table-sm mb-0">
             <tbody>
-              <tr><td>Revenue</td><td class="text-end">{{ incomeStatement.total_revenue }}</td></tr>
-              <tr><td>Cost of Sales</td><td class="text-end">({{ incomeStatement.total_cost_of_sales }})</td></tr>
-              <tr class="fw-bold border-top"><td>Gross Profit</td><td class="text-end">{{ incomeStatement.gross_profit }}</td></tr>
-              <tr><td>Operating Expenses</td><td class="text-end">({{ incomeStatement.total_expenses }})</td></tr>
-              <tr class="fw-bold border-top"><td>Operating Income</td><td class="text-end">{{ incomeStatement.operating_income }}</td></tr>
-              <tr><td>Other Income</td><td class="text-end">{{ incomeStatement.total_other_income }}</td></tr>
-              <tr><td>Other Expenses</td><td class="text-end">({{ incomeStatement.total_other_expenses }})</td></tr>
-              <tr class="fw-bold border-top"><td>Net Income</td><td class="text-end">{{ incomeStatement.net_income }}</td></tr>
+              <tr><td>Revenue</td><td class="text-end figure">{{ formatMoney(incomeStatement.total_revenue) }}</td></tr>
+              <tr><td>Cost of Sales</td><td class="text-end figure">({{ formatMoney(incomeStatement.total_cost_of_sales) }})</td></tr>
+              <tr class="fw-bold border-top"><td>Gross Profit</td><td class="text-end figure">{{ formatMoney(incomeStatement.gross_profit) }}</td></tr>
+              <tr><td>Operating Expenses</td><td class="text-end figure">({{ formatMoney(incomeStatement.total_expenses) }})</td></tr>
+              <tr class="fw-bold border-top"><td>Operating Income</td><td class="text-end figure">{{ formatMoney(incomeStatement.operating_income) }}</td></tr>
+              <tr><td>Other Income</td><td class="text-end figure">{{ formatMoney(incomeStatement.total_other_income) }}</td></tr>
+              <tr><td>Other Expenses</td><td class="text-end figure">({{ formatMoney(incomeStatement.total_other_expenses) }})</td></tr>
+              <tr class="fw-bold border-top"><td>Net Income</td><td class="text-end figure">{{ formatMoney(incomeStatement.net_income) }}</td></tr>
             </tbody>
           </table>
         </div>
@@ -107,9 +107,9 @@
             <tbody>
               <tr v-for="row in variance.rows" :key="row.account_id">
                 <td>{{ row.account_code }} — {{ row.account_name }}</td>
-                <td class="text-end">{{ row.budgeted_amount }}</td>
-                <td class="text-end">{{ row.actual_amount }}</td>
-                <td class="text-end" :class="Number(row.variance) < 0 ? 'text-danger' : 'text-success'">{{ row.variance }}</td>
+                <td class="text-end figure">{{ formatMoney(row.budgeted_amount) }}</td>
+                <td class="text-end figure">{{ formatMoney(row.actual_amount) }}</td>
+                <td class="text-end figure" :class="Number(row.variance) < 0 ? 'text-danger' : 'text-success'">{{ formatMoney(row.variance) }}</td>
               </tr>
             </tbody>
           </table>
@@ -123,6 +123,7 @@
 import { onMounted, ref } from "vue";
 import api from "../services/api";
 import { useBusinessStore } from "../stores/business";
+import { formatMoney } from "../utils/format";
 
 const businessStore = useBusinessStore();
 const bsDate = ref(new Date().toISOString().slice(0, 10));
