@@ -61,7 +61,7 @@
               <tr v-if="expandedId === entry.id" class="row-detail">
                 <td colspan="7" class="p-0">
                   <div class="row-detail__inner">
-                    <table class="table table-sm mb-0 row-detail__table">
+                    <table class="table table-sm mb-0 row-detail__table data-grid data-grid--journal-entry-detail">
                       <thead>
                         <tr>
                           <th>Account</th>
@@ -92,7 +92,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span><span class="fw-semibold">Total Debit:</span> <span class="figure fw-semibold">{{ formatMoney(listTotalDebit) }}</span></span>
+          <span><span class="fw-semibold">Total Credit:</span> <span class="figure fw-semibold">{{ formatMoney(listTotalCredit) }}</span></span>
+        </template>
+      </PaginationBar>
 
       <div v-if="!entries.length" class="empty-state">
         <i class="bi bi-journal-text"></i>
@@ -239,6 +244,18 @@ function accountLabel(id) {
 function entryAmount(entry) {
   return entry.lines.reduce((sum, l) => sum + Number(l.debit || 0), 0);
 }
+
+// Each entry is individually guaranteed to balance (the backend
+// rejects an unbalanced post), so summing every filtered entry's own
+// lines this way will always show Total Debit == Total Credit -- same
+// "proof of balance" idea as Trial Balance, just at the entry level
+// instead of the account level.
+const listTotalDebit = computed(() =>
+  filtered.value.reduce((sum, e) => sum + e.lines.reduce((s, l) => s + Number(l.debit || 0), 0), 0)
+);
+const listTotalCredit = computed(() =>
+  filtered.value.reduce((sum, e) => sum + e.lines.reduce((s, l) => s + Number(l.credit || 0), 0), 0)
+);
 
 const { query: search, filtered } = useTextFilter(entries, (e) => [e.reference, e.memo, e.source, e.status]);
 const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);

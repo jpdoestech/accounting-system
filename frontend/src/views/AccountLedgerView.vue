@@ -54,7 +54,12 @@
         v-model:page="page"
         v-model:page-size="pageSize"
         :total-items="totalItems"
-      />
+      >
+        <template #summary>
+          <span><span class="fw-semibold">Total Debit:</span> <span class="figure fw-semibold">{{ formatMoney(totalDebit) }}</span></span>
+          <span><span class="fw-semibold">Total Credit:</span> <span class="figure fw-semibold">{{ formatMoney(totalCredit) }}</span></span>
+        </template>
+      </PaginationBar>
     </div>
   </div>
 </template>
@@ -74,6 +79,16 @@ const ledger = ref(null);
 const ledgerLines = computed(() => ledger.value?.lines || []);
 const { query: search, filtered } = useTextFilter(ledgerLines, (l) => [l.description, l.memo, l.reference]);
 const { page, pageSize, pagedItems, totalItems } = usePagination(filtered);
+
+// Unlike a trial balance or a single journal entry, a single account's
+// debit and credit totals are NOT expected to match each other -- an
+// asset account normally accumulates far more debits than credits.
+// Opening balance + Total Debit - Total Credit (or the reverse,
+// depending on the account's normal balance side) is what produces
+// the closing balance shown above. Reflects ALL lines, not just the
+// filtered/paged view, same reasoning as Trial Balance's totals.
+const totalDebit = computed(() => ledgerLines.value.reduce((sum, l) => sum + Number(l.debit || 0), 0));
+const totalCredit = computed(() => ledgerLines.value.reduce((sum, l) => sum + Number(l.credit || 0), 0));
 
 async function loadLedger() {
   const bId = props.businessId || businessStore.activeBusinessId;

@@ -70,7 +70,7 @@
                 <td colspan="7" class="p-0">
                   <div class="row-detail__inner">
                     <div v-if="loadingDetail" class="text-muted small py-2">Loading lines…</div>
-                    <table v-else class="table table-sm mb-0 row-detail__table">
+                    <table v-else class="table table-sm mb-0 row-detail__table data-grid data-grid--purchase-bill-detail">
                       <thead>
                         <tr>
                           <th>Description</th>
