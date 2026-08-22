@@ -19,7 +19,7 @@
             not-yet-cleared transactions for this account show up here.
           </p>
 
-          <div class="uncleared-scroll">
+          <div class="table-scroll">
             <table class="table table-sm mb-0">
               <thead>
                 <tr>
@@ -226,11 +226,6 @@ onMounted(loadAll);
 </script>
 
 <style scoped>
-.uncleared-scroll {
-  max-height: 320px;
-  overflow-y: auto;
-}
-
 .reconcile-summary > div {
   padding: 0.2rem 0;
 }

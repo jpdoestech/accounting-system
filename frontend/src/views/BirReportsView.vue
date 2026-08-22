@@ -52,7 +52,7 @@
           <div v-if="loadingBook" class="text-muted small">Loading…</div>
 
           <!-- General Journal -->
-          <div v-else-if="activeBook === 'general-journal'" class="book-scroll">
+          <div v-else-if="activeBook === 'general-journal'" class="table-scroll">
             <div v-for="(entry, i) in bookRows" :key="i" class="mb-3 pb-2 border-bottom">
               <div class="d-flex justify-content-between small text-muted">
                 <span>{{ entry.entry_date }} · {{ entry.reference || "—" }} · {{ entry.memo || "—" }}</span>
@@ -73,7 +73,8 @@
           </div>
 
           <!-- Sales Book -->
-          <table v-else-if="activeBook === 'sales-book'" class="table table-sm book-scroll">
+          <div v-else-if="activeBook === 'sales-book'" class="table-scroll">
+          <table class="table table-sm">
             <thead><tr><th>No.</th><th>Date</th><th>Customer</th><th class="text-end">Total</th><th>Status</th></tr></thead>
             <tbody>
               <tr v-for="row in bookRows" :key="row.id">
@@ -86,9 +87,11 @@
               <tr v-if="!bookRows.length"><td colspan="5" class="text-muted text-center py-3">No invoices in this range.</td></tr>
             </tbody>
           </table>
+          </div>
 
           <!-- Purchase Book -->
-          <table v-else-if="activeBook === 'purchase-book'" class="table table-sm book-scroll">
+          <div v-else-if="activeBook === 'purchase-book'" class="table-scroll">
+          <table class="table table-sm">
             <thead><tr><th>No.</th><th>Date</th><th>Vendor</th><th class="text-end">Total</th><th>Status</th></tr></thead>
             <tbody>
               <tr v-for="row in bookRows" :key="row.id">
@@ -101,9 +104,11 @@
               <tr v-if="!bookRows.length"><td colspan="5" class="text-muted text-center py-3">No bills in this range.</td></tr>
             </tbody>
           </table>
+          </div>
 
           <!-- Cash Receipts Book -->
-          <table v-else-if="activeBook === 'cash-receipts-book'" class="table table-sm book-scroll">
+          <div v-else-if="activeBook === 'cash-receipts-book'" class="table-scroll">
+          <table class="table table-sm">
             <thead><tr><th>No.</th><th>Date</th><th>Customer</th><th class="text-end">Amount</th><th>Status</th></tr></thead>
             <tbody>
               <tr v-for="row in bookRows" :key="row.id">
@@ -116,9 +121,11 @@
               <tr v-if="!bookRows.length"><td colspan="5" class="text-muted text-center py-3">No receipts in this range.</td></tr>
             </tbody>
           </table>
+          </div>
 
           <!-- Cash Disbursements Book -->
-          <table v-else-if="activeBook === 'cash-disbursements-book'" class="table table-sm book-scroll">
+          <div v-else-if="activeBook === 'cash-disbursements-book'" class="table-scroll">
+          <table class="table table-sm">
             <thead><tr><th>No.</th><th>Date</th><th>Vendor</th><th class="text-end">Amount</th><th>Status</th></tr></thead>
             <tbody>
               <tr v-for="row in bookRows" :key="row.id">
@@ -131,6 +138,7 @@
               <tr v-if="!bookRows.length"><td colspan="5" class="text-muted text-center py-3">No payments in this range.</td></tr>
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -310,10 +318,3 @@ onMounted(async () => {
   await loadCertificates();
 });
 </script>
-
-<style scoped>
-.book-scroll {
-  max-height: 320px;
-  overflow-y: auto;
-}
-</style>

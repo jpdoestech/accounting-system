@@ -145,7 +145,7 @@
           Set a budgeted amount per account. Only accounts with a nonzero amount are saved —
           leave the rest blank.
         </p>
-        <div class="budget-lines-scroll mb-3">
+        <div class="table-scroll mb-3">
           <table class="table table-sm mb-0">
             <thead>
               <tr><th>Account</th><th style="width: 160px">Budgeted Amount</th></tr>
@@ -171,13 +171,6 @@
     </FormModal>
   </div>
 </template>
-
-<style scoped>
-.budget-lines-scroll {
-  max-height: 320px;
-  overflow-y: auto;
-}
-</style>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
