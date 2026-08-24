@@ -14,12 +14,6 @@
     <div class="view-scroll-area">
       <div class="table-scroll">
         <table class="table table-sm bg-white data-grid data-grid--trial-balance">
-          <colgroup>
-            <col style="width: 14%" />
-            <col style="width: 46%" />
-            <col style="width: 20%" />
-            <col style="width: 20%" />
-          </colgroup>
           <thead>
             <tr>
               <th>Code</th>

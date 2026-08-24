@@ -21,15 +21,6 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0 data-grid data-grid--purchase-bills">
-          <colgroup>
-            <col style="width: 3%" />
-            <col style="width: 13%" />
-            <col style="width: 11%" />
-            <col style="width: 31%" />
-            <col style="width: 13%" />
-            <col style="width: 11%" />
-            <col style="width: 18%" />
-          </colgroup>
           <thead>
             <tr>
               <th></th>

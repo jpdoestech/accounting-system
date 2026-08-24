@@ -19,15 +19,6 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0 data-grid data-grid--inventory-items">
-        <colgroup>
-          <col style="width: 12%" />
-          <col style="width: 32%" />
-          <col style="width: 12%" />
-          <col style="width: 12%" />
-          <col style="width: 14%" />
-          <col style="width: 8%" />
-          <col style="width: 10%" />
-        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">SKU</th>

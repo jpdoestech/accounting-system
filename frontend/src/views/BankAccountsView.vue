@@ -19,14 +19,6 @@
     <div class="card view-scroll-area">
       <div class="table-scroll">
         <table class="table table-hover mb-0 data-grid data-grid--bank-accounts">
-        <colgroup>
-          <col style="width: 22%" />
-          <col style="width: 22%" />
-          <col style="width: 20%" />
-          <col style="width: 16%" />
-          <col style="width: 10%" />
-          <col style="width: 10%" />
-        </colgroup>
         <thead>
           <tr>
             <th class="ps-3">Name</th>
