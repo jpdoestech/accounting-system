@@ -1,6 +1,11 @@
 <template>
   <div class="col-lg-6">
-    <h4>Business Settings</h4>
+    <div class="d-flex justify-content-between align-items-center">
+      <h4>Business Settings</h4>
+      <router-link :to="{ name: 'business-team', params: { id: props.id } }" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-people"></i> Team
+      </router-link>
+    </div>
     <p class="text-muted">
       Configurable values — no code changes needed to adjust these
       (spec Section 2).

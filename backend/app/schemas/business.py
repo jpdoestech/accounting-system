@@ -1,4 +1,32 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
+
+
+class BusinessMemberInvite(BaseModel):
+    email: EmailStr
+    role_name: str = "Accountant"
+
+
+class BusinessMemberRoleUpdate(BaseModel):
+    role_name: str
+
+
+class BusinessMemberRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str  # the UserBusinessRole row id -- what edit/remove act on
+    user_id: str
+    email: str
+    full_name: str | None = None
+    role_name: str
+    is_self: bool = False
+
+
+class RoleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    description: str | None = None
 
 
 class BusinessCreate(BaseModel):

@@ -35,6 +35,12 @@ const routes = [
         props: true,
       },
       {
+        path: "business/:id/team",
+        name: "business-team",
+        component: () => import("../views/BusinessTeamView.vue"),
+        props: true,
+      },
+      {
         path: "accounts",
         name: "accounts",
         component: () => import("../views/ChartOfAccountsView.vue"),
